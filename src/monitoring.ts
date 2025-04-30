@@ -1,63 +1,133 @@
 import * as vscode from 'vscode';
-import { ensureChatOpen } from './utils/chatUtils'; // Adjusted import path
-import { isWorkflowPaused, isWorkflowRunning } from './workflows/workflowManager';
+import { StatusManager, WorkflowState } from './statusManager';
+import { ensureChatOpen, isAgentWorking } from './utils/chatUtils';
+import { PromptService } from './services/promptService';
 
-let checkAgentTimer: NodeJS.Timeout | undefined;
-let ensureChatTimer: NodeJS.Timeout | undefined;
+/**
+ * Class responsible for monitoring the agent's status
+ */
+export class AgentMonitor {
+    private static instance: AgentMonitor;
+    private checkAgentIntervalId: NodeJS.Timeout | undefined;
+    private ensureChatIntervalId: NodeJS.Timeout | undefined;
+    private statusManager: StatusManager;
+    private promptService: PromptService;
 
-export function setupMonitoringTimers(context: vscode.ExtensionContext) {
-    // Clear existing timers if they exist
-    if (checkAgentTimer) { clearInterval(checkAgentTimer); }
-    if (ensureChatTimer) { clearInterval(ensureChatTimer); }
+    private constructor() {
+        this.statusManager = StatusManager.getInstance();
+        this.promptService = PromptService.getInstance();
+    }
 
-    // Get frequency from configuration
-    const config = vscode.workspace.getConfiguration('marco');
-    const checkAgentFrequency = config.get<number>('checkAgentFrequency') || 10000;
-    const ensureChatFrequency = config.get<number>('ensureChatFrequency') || 300000;
-
-    // Every 10s (or configured time): Check agent alive when workflow is running
-    checkAgentTimer = setInterval(() => {
-        if (isWorkflowRunning() && !isWorkflowPaused()) {
-            vscode.commands.executeCommand('marco.checkAgentAlive');
+    /**
+     * Get the singleton instance of AgentMonitor
+     */
+    public static getInstance(): AgentMonitor {
+        if (!AgentMonitor.instance) {
+            AgentMonitor.instance = new AgentMonitor();
         }
-    }, checkAgentFrequency);
+        return AgentMonitor.instance;
+    }
 
-    // Every 5min (or configured time): Ensure chat open when workflow is running
-    ensureChatTimer = setInterval(async () => {
-        if (isWorkflowRunning() && !isWorkflowPaused()) {
-            const config = vscode.workspace.getConfiguration('marco');
-            const backgroundMode = config.get<boolean>('backgroundMode') || false;
+    /**
+     * Start monitoring the agent's status
+     * @param context The extension context
+     */
+    public startMonitoring(context: vscode.ExtensionContext): void {
+        this.stopMonitoring(); // Clear any existing intervals
 
-            // Don't focus if in background mode
-            await ensureChatOpen(5, 1000, !backgroundMode);
+        // Check agent status every 10 seconds
+        this.checkAgentIntervalId = setInterval(() => {
+            this.checkAgentAlive().catch(err => {
+                console.error('Error in agent monitoring:', err);
+            });
+        }, 10_000);
+
+        // Ensure chat is open every 5 minutes
+        this.ensureChatIntervalId = setInterval(() => {
+            this.ensureChatIsOpen().catch(err => {
+                console.error('Error ensuring chat is open:', err);
+            });
+        }, 5 * 60_000);
+
+        // Add to subscriptions to ensure proper cleanup on deactivation
+        context.subscriptions.push({
+            dispose: () => this.stopMonitoring()
+        });
+    }
+
+    /**
+     * Stop all monitoring activities
+     */
+    public stopMonitoring(): void {
+        if (this.checkAgentIntervalId) {
+            clearInterval(this.checkAgentIntervalId);
+            this.checkAgentIntervalId = undefined;
         }
-    }, ensureChatFrequency);
 
-    // Clean up timers on deactivation (add to context subscriptions)
-    context.subscriptions.push({
-        dispose: () => {
-            if (checkAgentTimer) { clearInterval(checkAgentTimer); }
-            if (ensureChatTimer) { clearInterval(ensureChatTimer); }
+        if (this.ensureChatIntervalId) {
+            clearInterval(this.ensureChatIntervalId);
+            this.ensureChatIntervalId = undefined;
         }
-    });
+    }
 
-    // Watch for configuration changes (handled within this function now)
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('marco.checkAgentFrequency') ||
-                e.affectsConfiguration('marco.ensureChatFrequency')) {
+    /**
+     * Check if the agent is alive and prompt if idle
+     */
+    private async checkAgentAlive(): Promise<void> {
+        const currentState = this.statusManager.getState();
 
-                console.log("Monitoring configuration changed, restarting timers.");
-                // Re-setup timers with new frequencies
-                setupMonitoringTimers(context); // Recursive call to restart with new config
-            }
-        })
-    );
-}
+        // Skip check for these states
+        if (currentState === WorkflowState.Idle ||
+            currentState === WorkflowState.Paused ||
+            currentState === WorkflowState.Error ||
+            currentState === WorkflowState.Completed) {
+            return;
+        }
 
-export function clearMonitoringTimers() {
-    if (checkAgentTimer) { clearInterval(checkAgentTimer); }
-    if (ensureChatTimer) { clearInterval(ensureChatTimer); }
-    checkAgentTimer = undefined;
-    ensureChatTimer = undefined;
+        // Check for idleness based on time and status
+        const isIdle = await this.isAgentIdle();
+        if (isIdle) {
+            console.log('Agent appears to be idle, sending prompt...');
+            await this.promptService.sendMessage('Are you still working on the task? Please provide an update on your progress.');
+        }
+    }
+
+    /**
+     * Determine if the agent is idle
+     */
+    private async isAgentIdle(): Promise<boolean> {
+        // Check if agent is actively working (e.g., generating content)
+        const isWorking = await isAgentWorking();
+        if (isWorking) {
+            return false;
+        }
+
+        // Check based on time since last status update
+        const lastActivityTime = this.statusManager.getLastUpdateTime();
+        if (!lastActivityTime) {
+            return false;
+        }
+
+        const config = vscode.workspace.getConfiguration('marco');
+        const idleTimeoutMs = config.get<number>('idleTimeoutSeconds', 30) * 1000;
+
+        const timeSinceLastActivity = Date.now() - lastActivityTime.getTime();
+        return timeSinceLastActivity > idleTimeoutMs;
+    }
+
+    /**
+     * Ensure the Copilot Chat panel is open
+     */
+    private async ensureChatIsOpen(): Promise<void> {
+        const currentState = this.statusManager.getState();
+
+        // Only ensure chat is open if we're in an active workflow state
+        if (currentState !== WorkflowState.Idle &&
+            currentState !== WorkflowState.Paused &&
+            currentState !== WorkflowState.Error &&
+            currentState !== WorkflowState.Completed) {
+
+            await ensureChatOpen(3, 1000, false);
+        }
+    }
 }

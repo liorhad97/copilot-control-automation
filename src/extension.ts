@@ -1,79 +1,72 @@
 import * as vscode from 'vscode';
-import { registerCommands } from './commands'; // Import from new file
-import { clearMonitoringTimers, setupMonitoringTimers } from './monitoring'; // Import from new file
+import { runWorkflow } from './workflow';
 import { StatusManager } from './statusManager';
-import { SidebarProvider } from './ui/sidebarProvider';
-// Removed unused imports: ensureChatOpen, sendChatMessage, isAgentIdle, isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow
+import { AgentMonitor } from './monitoring';
 
-function showWelcomePage(context: vscode.ExtensionContext) {
-	const panel = vscode.window.createWebviewPanel(
-		'marcoWelcome',
-		'Welcome to Marco AI',
-		vscode.ViewColumn.One,
-		{ enableScripts: true }
-	);
-	panel.webview.html = `
-        <html>
-        <head>
-            <style>
-                body { font-family: sans-serif; padding: 2em; }
-                h1 { color: #007acc; }
-            </style>
-        </head>
-        <body>
-            <h1>👋 Welcome to Marco AI!</h1>
-            <p>Automate your AI workflows in VS Code.</p>
-            <ul>
-                <li>Use the <b>Marco AI</b> icon in the Activity Bar to open your dashboard.</li>
-                <li>Configure your workflow in <b>Settings</b>.</li>
-                <li>Start, pause, or restart workflows from the Command Palette or Activity Bar.</li>
-            </ul>
-            <p>Get started by running a workflow or exploring the dashboard!</p>
-        </body>
-        </html>
-    `;
-}
-
+/**
+ * Activate the extension
+ * @param context The extension context
+ */
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Marco AI extension is now active');
+    console.log('Marco AI extension is now active');
 
-	// Initialize status manager
-	const statusManager = StatusManager.getInstance();
-	statusManager.initialize(context);
+    // Initialize status manager
+    const statusManager = StatusManager.getInstance();
+    statusManager.initialize(context);
 
-	// Create sidebar
-	const sidebarProvider = new SidebarProvider(context.extensionUri, context);
-	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(
-			"marco-ai.sidebar",
-			sidebarProvider
-		)
-	);
+    // Create status bar buttons
+    createStatusBarItems(context);
 
-	// Register commands from the dedicated file
-	registerCommands(context);
+    // Register commands
+    registerCommands(context);
 
-	// Set up timers for monitoring from the dedicated file
-	setupMonitoringTimers(context);
-
-	// Register welcome page command
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.showWelcome', () => showWelcomePage(context))
-	);
-
-	// Show welcome page on first activation
-	const hasShownWelcome = context.globalState.get('marco.hasShownWelcome');
-	if (!hasShownWelcome) {
-		showWelcomePage(context);
-		context.globalState.update('marco.hasShownWelcome', true);
-	}
-
-	vscode.window.showInformationMessage('Marco AI is ready to help!');
+    // Start monitoring
+    const agentMonitor = AgentMonitor.getInstance();
+    agentMonitor.startMonitoring(context);
 }
 
+/**
+ * Create status bar items for Play/Pause/Stop/Restart
+ * @param context The extension context
+ */
+function createStatusBarItems(context: vscode.ExtensionContext) {
+    const buttons = [
+        { id: 'play',    icon: 'triangle-right', alignment: vscode.StatusBarAlignment.Left, priority: 100 },
+        { id: 'pause',   icon: 'debug-pause',    alignment: vscode.StatusBarAlignment.Left, priority: 99 },
+        { id: 'stop',    icon: 'debug-stop',     alignment: vscode.StatusBarAlignment.Left, priority: 98 },
+        { id: 'restart', icon: 'debug-restart',  alignment: vscode.StatusBarAlignment.Left, priority: 97 }
+    ];
+
+    buttons.forEach(btn => {
+        const item = vscode.window.createStatusBarItem(btn.alignment, btn.priority);
+        item.text = `$(${btn.icon}) ${btn.id.charAt(0).toUpperCase() + btn.id.slice(1)}`;
+        item.command = `marco.${btn.id}`;
+        item.tooltip = `Marco AI: ${btn.id.charAt(0).toUpperCase() + btn.id.slice(1)}`;
+        item.show();
+        context.subscriptions.push(item);
+    });
+}
+
+/**
+ * Register extension commands
+ * @param context The extension context
+ */
+function registerCommands(context: vscode.ExtensionContext) {
+    // Register workflow control commands
+    ['play', 'pause', 'stop', 'restart'].forEach(action => {
+        context.subscriptions.push(
+            vscode.commands.registerCommand(`marco.${action}`, () => runWorkflow(context, action))
+        );
+    });
+}
+
+/**
+ * Deactivate the extension
+ */
 export function deactivate() {
-	console.log('Marco AI extension is now deactivated');
-	// Clear timers on deactivation
-	clearMonitoringTimers();
-	// Any other cleanup logic goes here
+    // Stop any active monitoring
+    const agentMonitor = AgentMonitor.getInstance();
+    agentMonitor.stopMonitoring();
+
+    console.log('Marco AI extension has been deactivated');
 }
