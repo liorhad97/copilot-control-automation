@@ -3,16 +3,25 @@
 /**
  * Client-side functionality for the Marco AI sidebar
  */
+
 (function () {
+    // VSCode API usage - declare it as any to avoid TypeScript errors
+    // @ts-ignore
     const vscode = acquireVsCodeApi();
 
-    // DOM Elements
-    const playBtn = document.getElementById('playBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const restartBtn = document.getElementById('restartBtn');
-    const backgroundModeCheckbox = document.getElementById('backgroundMode');
-    const statusTextEl = document.getElementById('statusText');
+    // DOM Elements with proper type casting
+    /** @type {HTMLButtonElement} */
+    const playBtn = /** @type {HTMLButtonElement} */ (document.getElementById('playBtn'));
+    /** @type {HTMLButtonElement} */
+    const pauseBtn = /** @type {HTMLButtonElement} */ (document.getElementById('pauseBtn'));
+    /** @type {HTMLButtonElement} */
+    const stopBtn = /** @type {HTMLButtonElement} */ (document.getElementById('stopBtn'));
+    /** @type {HTMLButtonElement} */
+    const restartBtn = /** @type {HTMLButtonElement} */ (document.getElementById('restartBtn'));
+    /** @type {HTMLInputElement} */
+    const backgroundModeCheckbox = /** @type {HTMLInputElement} */ (document.getElementById('backgroundMode'));
+    /** @type {HTMLElement} */
+    const statusTextEl = /** @type {HTMLElement} */ (document.getElementById('statusText'));
 
     // Initial state
     let isRunning = false;
@@ -22,29 +31,39 @@
     // Get background mode setting from configuration
     vscode.postMessage({ command: 'getBackgroundMode' });
 
-    // Event listeners
-    playBtn.addEventListener('click', () => {
-        vscode.postMessage({ command: 'play' });
-    });
-
-    pauseBtn.addEventListener('click', () => {
-        vscode.postMessage({ command: 'pause' });
-    });
-
-    stopBtn.addEventListener('click', () => {
-        vscode.postMessage({ command: 'stop' });
-    });
-
-    restartBtn.addEventListener('click', () => {
-        vscode.postMessage({ command: 'restart' });
-    });
-
-    backgroundModeCheckbox.addEventListener('change', () => {
-        vscode.postMessage({ 
-            command: 'toggleBackground', 
-            value: backgroundModeCheckbox.checked 
+    // Event listeners with null checks
+    if (playBtn) {
+        playBtn.addEventListener('click', () => {
+            vscode.postMessage({ command: 'play' });
         });
-    });
+    }
+
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', () => {
+            vscode.postMessage({ command: 'pause' });
+        });
+    }
+
+    if (stopBtn) {
+        stopBtn.addEventListener('click', () => {
+            vscode.postMessage({ command: 'stop' });
+        });
+    }
+
+    if (restartBtn) {
+        restartBtn.addEventListener('click', () => {
+            vscode.postMessage({ command: 'restart' });
+        });
+    }
+
+    if (backgroundModeCheckbox) {
+        backgroundModeCheckbox.addEventListener('change', () => {
+            vscode.postMessage({
+                command: 'toggleBackground',
+                value: backgroundModeCheckbox.checked
+            });
+        });
+    }
 
     // Handle messages from extension
     window.addEventListener('message', (event) => {
@@ -56,9 +75,11 @@
                 isPaused = message.data.isPaused;
                 updateUIFromState();
                 break;
-                
+
             case 'background-mode':
-                backgroundModeCheckbox.checked = message.value;
+                if (backgroundModeCheckbox) {
+                    backgroundModeCheckbox.checked = message.value;
+                }
                 break;
         }
     });
@@ -69,28 +90,34 @@
     function updateUIFromState() {
         // Button visibility and text
         if (isRunning) {
-            playBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-block';
-            pauseBtn.style.display = 'inline-block';
-            restartBtn.style.display = 'inline-block';
-            
+            if (playBtn) playBtn.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'inline-block';
+            if (pauseBtn) pauseBtn.style.display = 'inline-block';
+            if (restartBtn) restartBtn.style.display = 'inline-block';
+
             if (isPaused) {
-                pauseBtn.innerHTML = '<span class="icon play-icon">▶</span> Resume';
-                statusTextEl.textContent = 'Paused';
-                statusTextEl.classList.add('paused');
+                if (pauseBtn) pauseBtn.innerHTML = '<span class="icon play-icon">▶</span> Resume';
+                if (statusTextEl) {
+                    statusTextEl.textContent = 'Paused';
+                    statusTextEl.classList.add('paused');
+                }
             } else {
-                pauseBtn.innerHTML = '<span class="icon pause-icon">⏸</span> Pause';
-                statusTextEl.textContent = 'Running';
-                statusTextEl.classList.remove('paused');
-                statusTextEl.classList.add('running');
+                if (pauseBtn) pauseBtn.innerHTML = '<span class="icon pause-icon">⏸</span> Pause';
+                if (statusTextEl) {
+                    statusTextEl.textContent = 'Running';
+                    statusTextEl.classList.remove('paused');
+                    statusTextEl.classList.add('running');
+                }
             }
         } else {
-            playBtn.style.display = 'inline-block';
-            stopBtn.style.display = 'none';
-            pauseBtn.style.display = 'none';
-            restartBtn.style.display = 'none';
-            statusTextEl.textContent = 'Idle';
-            statusTextEl.classList.remove('running', 'paused');
+            if (playBtn) playBtn.style.display = 'inline-block';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (pauseBtn) pauseBtn.style.display = 'none';
+            if (restartBtn) restartBtn.style.display = 'none';
+            if (statusTextEl) {
+                statusTextEl.textContent = 'Idle';
+                statusTextEl.classList.remove('running', 'paused');
+            }
         }
     }
 })();
