@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { StatusManager } from './statusManager';
 import { SidebarProvider } from './ui/sidebarProvider';
-import { ensureChatOpen, sendChatMessage } from './utils';
+import { AgentManager } from './core/agentManager';
+import { PromptManager } from './core/promptManager';
 import { isAgentIdle, isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow } from './workflows/workflowManager';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -10,6 +11,10 @@ export function activate(context: vscode.ExtensionContext) {
 	// Initialize status manager
 	const statusManager = StatusManager.getInstance();
 	statusManager.initialize(context);
+
+	// Preload common prompts
+	const promptManager = PromptManager.getInstance();
+	promptManager.preloadCommonPrompts();
 
 	// Create sidebar
 	const sidebarProvider = new SidebarProvider(context.extensionUri, context);
@@ -71,7 +76,8 @@ function registerCommands(context: vscode.ExtensionContext) {
 	// Command to open Copilot Chat
 	context.subscriptions.push(
 		vscode.commands.registerCommand('marco.openChat', async () => {
-			await ensureChatOpen(5, 1000, true);
+			const agentManager = AgentManager.getInstance();
+			await agentManager.ensureChatOpen(5, 1000, true);
 		})
 	);
 
@@ -86,14 +92,15 @@ function registerCommands(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('marco.checkAgentAlive', async () => {
 			if (isWorkflowRunning() && !isWorkflowPaused()) {
-				const idle = await isAgentIdle();
+				const idle = isAgentIdle();
 				if (idle) {
 					// Get background mode configuration
 					const config = vscode.workspace.getConfiguration('marco');
 					const backgroundMode = config.get<boolean>('backgroundMode') || false;
 
-					// Send prompt to idle agent, using background mode setting
-					await sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
+					// Send prompt to idle agent
+					const agentManager = AgentManager.getInstance();
+					await agentManager.sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
 				}
 			}
 		})
@@ -138,7 +145,8 @@ function setupMonitoringTimers(context: vscode.ExtensionContext) {
 			const backgroundMode = config.get<boolean>('backgroundMode') || false;
 
 			// Don't focus if in background mode
-			await ensureChatOpen(5, 1000, !backgroundMode);
+			const agentManager = AgentManager.getInstance();
+			await agentManager.ensureChatOpen(5, 1000, !backgroundMode);
 		}
 	}, ensureChatFrequency);
 
