@@ -123,14 +123,14 @@ export async function sendChatMessage(message: string, backgroundMode = false): 
     }
 
     try {
-        // First ensure chat is open, focusing on it if not in background mode
-        const chatOpened = await ensureChatOpen(3, 1000, !backgroundMode);
+        // Ensure chat is open, but DON'T force focus here. Focus is handled at workflow start/restart.
+        const chatOpened = await ensureChatOpen(3, 1000, false); // Changed focus parameter to false
         if (!chatOpened) {
-            console.error('Failed to open chat');
+            console.error('Failed to open chat before sending message');
             return false;
         }
 
-        // Wait for chat to be fully ready
+        // Wait briefly for chat to be ready (especially if it was just opened)
         await new Promise(resolve => setTimeout(resolve, 500));
 
         try {
@@ -140,8 +140,9 @@ export async function sendChatMessage(message: string, backgroundMode = false): 
         } catch (error) {
             console.log('Failed to send message via sendMessage command:', error);
 
-            // Fallback: Focus the chat and insert the message
-            await focusChatTab();
+            // Fallback: Focus the chat explicitly for the fallback method
+            await focusChatTab(); // Ensure focus for fallback
+            await new Promise(resolve => setTimeout(resolve, 300)); // Wait after focus
             await vscode.commands.executeCommand('editor.action.insertLineAfter');
 
             // Use the clipboard as intermediary to paste message

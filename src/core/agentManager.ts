@@ -1,6 +1,4 @@
-import * as vscode from 'vscode';
-import { ensureChatOpen, sendChatMessage } from '../utils/chatUtils';
-import { selectAIModel } from '../utils/modelUtils';
+import { ensureChatOpen, selectAIModel, sendChatMessage } from '../utils'; // Updated import
 
 /**
  * Manages interactions with the AI agent (Copilot)
@@ -10,7 +8,7 @@ export class AgentManager {
     private backgroundMode: boolean = false;
     private lastInteractionTime: Date = new Date();
 
-    private constructor() {}
+    private constructor() { }
 
     /**
      * Get the singleton instance of AgentManager
@@ -58,6 +56,7 @@ export class AgentManager {
      * @param focus Whether to focus the chat panel
      */
     public async ensureChatOpen(maxAttempts: number = 5, interval: number = 1000, focus: boolean = true): Promise<boolean> {
+        // Use the imported function from utils.ts
         return ensureChatOpen(maxAttempts, interval, focus);
     }
 
@@ -68,6 +67,7 @@ export class AgentManager {
      */
     public async sendChatMessage(message: string, background?: boolean): Promise<void> {
         const useBackgroundMode = background !== undefined ? background : this.backgroundMode;
+        // Use the imported function from utils.ts
         await sendChatMessage(message, useBackgroundMode);
         this.updateLastInteractionTime();
     }
@@ -77,6 +77,7 @@ export class AgentManager {
      * @param modelName The name of the model to select
      */
     public async selectModel(modelName: string): Promise<boolean> {
+        // Use the imported function from utils.ts
         return await selectAIModel(modelName);
     }
 

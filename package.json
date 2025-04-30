@@ -64,13 +64,21 @@
         },
         "marco.preferredModels": {
           "type": "array",
-          "default": ["Claude 3.7 Sonnet", "Gemini 2.5", "GPT 4.1"],
+          "default": [
+            "Claude 3.7 Sonnet",
+            "Gemini 2.5",
+            "GPT 4.1"
+          ],
           "description": "Ordered list of preferred AI models to use (first available will be selected)"
         },
         "marco.agentMode": {
           "type": "string",
           "default": "Agent",
-          "enum": ["Agent", "Edit", "Ask"],
+          "enum": [
+            "Agent",
+            "Edit",
+            "Ask"
+          ],
           "description": "Mode to use when instructing the AI agent"
         },
         "marco.checkAgentFrequency": {
@@ -160,3 +168,4 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {}
+}

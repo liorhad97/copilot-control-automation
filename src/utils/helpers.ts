@@ -2,6 +2,16 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 /**
+ * Custom error for when a workflow is cancelled
+ */
+export class WorkflowCancelledError extends Error {
+    constructor(message = "Workflow was cancelled") {
+        super(message);
+        this.name = "WorkflowCancelledError";
+    }
+}
+
+/**
  * Generates a nonce string for use with Content Security Policy
  * @returns Random nonce string
  */

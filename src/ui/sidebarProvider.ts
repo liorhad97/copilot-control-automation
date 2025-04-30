@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getNonce } from '../utils/helpers';
 import { isWorkflowPaused, isWorkflowRunning } from '../workflows/workflowManager';
 
 /**
@@ -6,11 +7,12 @@ import { isWorkflowPaused, isWorkflowRunning } from '../workflows/workflowManage
  */
 export class SidebarProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
+    private _disposables: vscode.Disposable[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
-    ) {}
+    ) { }
 
     /**
      * Called when the webview is first created
@@ -23,15 +25,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     ) {
         this._view = webviewView;
 
+        // Allow scripts in the webview
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
         };
 
+        // Set webview's initial html
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        // Set up message handling
+        // Handle messages from the webview
         this._setWebviewMessageListener(webviewView.webview);
+
+        // Initial update of the sidebar state
+        this.updateSidebarState();
 
         // Update sidebar state regularly
         const updateInterval = setInterval(() => {
@@ -42,16 +49,32 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             }
         }, 1000);
 
-        // Clear interval when webview is disposed
+        // Get background mode setting
+        const config = vscode.workspace.getConfiguration('marco');
+        const backgroundMode = config.get<boolean>('backgroundMode', false);
+
+        // Send initial background mode state to webview
+        webviewView.webview.postMessage({
+            type: 'background-mode',
+            value: backgroundMode
+        });
+
+        // Clear interval and disposables when webview is disposed
         webviewView.onDidDispose(() => {
             clearInterval(updateInterval);
+            while (this._disposables.length) {
+                const disposable = this._disposables.pop();
+                if (disposable) {
+                    disposable.dispose();
+                }
+            }
         });
     }
 
     /**
      * Update the sidebar state to reflect current workflow status
      */
-    private updateSidebarState() {
+    public updateSidebarState() {
         if (!this._view) {
             return;
         }
@@ -67,6 +90,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             type: 'update-state',
             data: state
         });
+
+        // Make the view visible if it isn't already
+        this._view.show(true);
     }
 
     /**
@@ -75,22 +101,32 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
      */
     private _setWebviewMessageListener(webview: vscode.Webview) {
         webview.onDidReceiveMessage(
-            (message) => {
+            async (message) => {
+                console.log('Received message from webview:', message);
+
                 switch (message.command) {
                     case 'play':
-                        vscode.commands.executeCommand('marco.toggleWorkflow');
+                        await vscode.commands.executeCommand('marco.toggleWorkflow');
                         break;
                     case 'pause':
-                        vscode.commands.executeCommand('marco.pauseWorkflow');
+                        await vscode.commands.executeCommand('marco.pauseWorkflow');
                         break;
                     case 'stop':
-                        vscode.commands.executeCommand('marco.toggleWorkflow');
+                        await vscode.commands.executeCommand('marco.toggleWorkflow');
                         break;
                     case 'restart':
-                        vscode.commands.executeCommand('marco.restart');
+                        await vscode.commands.executeCommand('marco.restart');
                         break;
                     case 'toggleBackground':
-                        vscode.commands.executeCommand('marco.toggleBackgroundMode');
+                        await vscode.commands.executeCommand('marco.toggleBackgroundMode');
+                        break;
+                    case 'getBackgroundMode':
+                        const config = vscode.workspace.getConfiguration('marco');
+                        const backgroundMode = config.get<boolean>('backgroundMode', false);
+                        webview.postMessage({
+                            type: 'background-mode',
+                            value: backgroundMode
+                        });
                         break;
                 }
             },
@@ -116,13 +152,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         );
 
         // Use a nonce to only allow specific scripts to be run
-        const nonce = this._getNonce();
+        const nonce = getNonce();
 
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link href="${stylesUri}" rel="stylesheet">
                 <title>Marco AI</title>
@@ -164,18 +200,5 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 <script nonce="${nonce}" src="${scriptUri}"></script>
             </body>
             </html>`;
-    }
-
-    /**
-     * Generate a random nonce string for security
-     * @returns A random nonce string
-     */
-    private _getNonce(): string {
-        let text = '';
-        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        for (let i = 0; i < 32; i++) {
-            text += possible.charAt(Math.floor(Math.random() * possible.length));
-        }
-        return text;
     }
 }

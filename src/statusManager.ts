@@ -28,20 +28,23 @@ export class StatusManager {
     private currentState: WorkflowState = WorkflowState.Idle;
     private lastActivityTime: Date | null = null;
     private stateChangeListeners: StateChangeListener[] = [];
-    
+
     // Status bar items
     private playPauseButton: vscode.StatusBarItem | undefined;
     private stopButton: vscode.StatusBarItem | undefined;
     private restartButton: vscode.StatusBarItem | undefined;
     private stateLabel: vscode.StatusBarItem | undefined;
-    
+
+    // Activity bar badge
+    private badge: vscode.StatusBarItem | undefined;
+
     // Animation properties
     private animationFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     private animationIndex = 0;
     private animationInterval: NodeJS.Timeout | undefined;
 
     // Private constructor for singleton pattern
-    private constructor() {}
+    private constructor() { }
 
     /**
      * Get the singleton instance of StatusManager
@@ -60,22 +63,33 @@ export class StatusManager {
     public initialize(context: vscode.ExtensionContext): void {
         // Create play/pause button
         this.playPauseButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-        this.playPauseButton.command = 'marco.pauseWorkflow';
+        this.playPauseButton.command = 'marco.toggleWorkflow';
+        this.playPauseButton.tooltip = "Start Marco AI workflow";
         context.subscriptions.push(this.playPauseButton);
 
         // Create stop button
         this.stopButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
         this.stopButton.command = 'marco.toggleWorkflow';
+        this.stopButton.tooltip = "Stop Marco AI workflow";
         context.subscriptions.push(this.stopButton);
 
         // Create restart button
         this.restartButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
         this.restartButton.command = 'marco.restart';
+        this.restartButton.tooltip = "Restart Marco AI workflow";
         context.subscriptions.push(this.restartButton);
 
         // Create state label
         this.stateLabel = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
         context.subscriptions.push(this.stateLabel);
+
+        // Create badge for activity bar (will be used later for commands to show/hide)
+        this.badge = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+        this.badge.text = "$(rocket) Marco";
+        // this.badge.command = 'marco.openSidebar'; // Removed command to prevent auto-opening sidebar
+        this.badge.tooltip = "Marco AI Status"; // Updated tooltip
+        this.badge.show(); // Always show the badge
+        context.subscriptions.push(this.badge);
 
         // Set initial state
         this.setState(WorkflowState.Idle, 'Ready');
@@ -114,7 +128,7 @@ export class StatusManager {
     public getCurrentState(): WorkflowState {
         return this.currentState;
     }
-    
+
     /**
      * Get the time of the last activity
      */
@@ -160,7 +174,7 @@ export class StatusManager {
         // Update all status bar items
         switch (this.currentState) {
             case WorkflowState.Idle:
-                this.playPauseButton.text = "$(play) Play";
+                this.playPauseButton.text = "$(play) Marco AI";
                 this.playPauseButton.tooltip = "Start Marco AI workflow";
                 this.stopButton.text = "$(debug-stop) Stop";
                 this.stopButton.tooltip = "Stop Marco AI workflow";
@@ -240,9 +254,41 @@ export class StatusManager {
                 this.showRestartButton(true);
                 break;
         }
-        
+
         // Set status bar colors
         this.setStatusBarColor();
+
+        // Update badge based on state
+        this.updateBadge();
+    }
+
+    /**
+     * Update the activity bar badge based on current state
+     */
+    private updateBadge(): void {
+        if (!this.badge) {
+            return;
+        }
+
+        if (this.currentState !== WorkflowState.Idle) {
+            // Show badge with state indication when workflow is active
+            let badgeIcon = "$(rocket)";
+
+            if (this.currentState === WorkflowState.Paused) {
+                badgeIcon = "$(debug-pause)";
+            } else if (this.currentState === WorkflowState.Error) {
+                badgeIcon = "$(error)";
+            } else if (this.currentState === WorkflowState.Completed) {
+                badgeIcon = "$(check)";
+            }
+
+            this.badge.text = `${badgeIcon} Marco`;
+            this.badge.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+        } else {
+            // Reset badge when idle
+            this.badge.text = "$(rocket) Marco";
+            this.badge.backgroundColor = undefined;
+        }
     }
 
     /**
@@ -262,7 +308,7 @@ export class StatusManager {
         if (!this.stateLabel) {
             return;
         }
-        
+
         switch (this.currentState) {
             case WorkflowState.Error:
                 this.stateLabel.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
@@ -286,7 +332,7 @@ export class StatusManager {
         if (!this.lastActivityTime) {
             return '';
         }
-        
+
         const now = new Date();
         const elapsed = Math.floor((now.getTime() - this.lastActivityTime.getTime()) / 1000);
 
@@ -387,21 +433,25 @@ export class StatusManager {
      */
     public dispose(): void {
         this.stopAnimation();
-        
+
         if (this.playPauseButton) {
             this.playPauseButton.dispose();
         }
-        
+
         if (this.stopButton) {
             this.stopButton.dispose();
         }
-        
+
         if (this.restartButton) {
             this.restartButton.dispose();
         }
-        
+
         if (this.stateLabel) {
             this.stateLabel.dispose();
+        }
+
+        if (this.badge) {
+            this.badge.dispose();
         }
     }
 }
