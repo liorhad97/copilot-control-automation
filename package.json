@@ -2,65 +2,49 @@
   "name": "marco-ai",
   "displayName": "Marco AI",
   "description": "Automate your AI workflows in VS Code",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.99.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Machine Learning",
+    "Programming Languages",
+    "Testing"
   ],
   "activationEvents": [
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "marco-ai-activitybar",
-          "title": "Marco AI",
-          "icon": "$(rocket)"
-        }
-      ]
-    },
-    "views": {
-      "marco-ai-activitybar": [
-        {
-          "type": "webview",
-          "id": "marco-ai.sidebar",
-          "name": "Marco AI Dashboard",
-          "icon": "$(dashboard)"
-        }
-      ]
-    },
     "commands": [
       {
-        "command": "marco.toggleWorkflow",
-        "title": "Marco AI: Toggle Workflow Play/Stop"
+        "command": "marco.play",
+        "title": "Marco AI: Play Workflow"
       },
       {
-        "command": "marco.pauseWorkflow",
-        "title": "Marco AI: Pause/Resume Workflow"
+        "command": "marco.pause",
+        "title": "Marco AI: Pause Workflow"
+      },
+      {
+        "command": "marco.stop",
+        "title": "Marco AI: Stop Workflow"
       },
       {
         "command": "marco.restart",
         "title": "Marco AI: Restart Workflow"
       },
       {
-        "command": "marco.openChat",
-        "title": "Marco AI: Open Copilot Chat"
-      },
-      {
-        "command": "marco.openSidebar",
-        "title": "Marco AI: Open Dashboard"
-      },
-      {
         "command": "marco.checkAgentAlive",
         "title": "Marco AI: Check if Agent is Active"
       },
       {
-        "command": "marco.showWelcome",
-        "title": "Marco AI: Show Welcome Page"
+        "command": "marco.sendCustomMessage",
+        "title": "Marco AI: Send Custom Message to Chat"
+      },
+      {
+        "command": "marco.selectModel",
+        "title": "Marco AI: Select Preferred AI Model"
       }
     ],
     "configuration": {
@@ -81,6 +65,11 @@
           "type": "boolean",
           "default": false,
           "description": "Run Marco workflow in background mode, minimizing focus changes to the Copilot chat"
+        },
+        "marco.idleTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "description": "Number of seconds before considering the agent idle"
         },
         "marco.agentMode": {
           "type": "string",
