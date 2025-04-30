@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 /**
- * Enum representing the different states of the Marco AI workflow
+ * Workflow states for the status bar
  */
 export enum WorkflowState {
     Idle = 'idle',
@@ -10,34 +10,28 @@ export enum WorkflowState {
     SendingTask = 'sending-task',
     CheckingStatus = 'checking-status',
     RequestingTests = 'requesting-tests',
-    VerifyingCompletion = 'verifying-completion',
     VerifyingChecklist = 'verifying-checklist',
+    VerifyingCompletion = 'verifying-completion',
     ContinuingIteration = 'continuing-iteration',
     Paused = 'paused',
     Completed = 'completed',
     Error = 'error'
 }
 
-type StateChangeListener = (state: WorkflowState, message?: string) => void;
-
 /**
- * Manages the status display for the Marco AI workflow
+ * Manages the status bar display and workflow state
  */
 export class StatusManager {
     private static instance: StatusManager;
+    private playPauseButton: vscode.StatusBarItem | undefined;
+    private stopButton: vscode.StatusBarItem | undefined;
+    private restartButton: vscode.StatusBarItem | undefined;
+    private stateLabel: vscode.StatusBarItem | undefined;
     private currentState: WorkflowState = WorkflowState.Idle;
-    private statusBarItem: vscode.StatusBarItem;
-    private lastUpdateTime: Date = new Date();
-    private animationFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-    private animationIndex = 0;
-    private animationInterval: NodeJS.Timeout | undefined;
-    private stateChangeListeners: StateChangeListener[] = [];
+    private lastActivityTime: Date | null = null;
 
-    private constructor() {
-        this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
-        this.updateStatusBar();
-        this.statusBarItem.show();
-    }
+    // Private constructor for singleton pattern
+    private constructor() {}
 
     /**
      * Get the singleton instance of StatusManager
@@ -50,207 +44,191 @@ export class StatusManager {
     }
 
     /**
-     * Initialize the StatusManager with extension context
-     * @param context The extension context
+     * Initialize status bar items
+     * @param context VS Code extension context
      */
     public initialize(context: vscode.ExtensionContext): void {
-        // Add to subscriptions to ensure proper cleanup on deactivation
-        context.subscriptions.push(this.statusBarItem);
+        // Create play/pause button
+        this.playPauseButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        this.playPauseButton.command = 'marco.pauseWorkflow';
+        context.subscriptions.push(this.playPauseButton);
+
+        // Create stop button
+        this.stopButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+        this.stopButton.command = 'marco.toggleWorkflow';
+        context.subscriptions.push(this.stopButton);
+
+        // Create restart button
+        this.restartButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
+        this.restartButton.command = 'marco.restart';
+        context.subscriptions.push(this.restartButton);
+
+        // Create state label
+        this.stateLabel = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
+        context.subscriptions.push(this.stateLabel);
+
+        // Set initial state
+        this.setState(WorkflowState.Idle, 'Ready');
     }
 
     /**
-     * Set the current workflow state
-     * @param state The new workflow state
-     * @param message Optional message to display with the state
+     * Set the current workflow state and update status bar
+     * @param state New workflow state
+     * @param message Optional status message
      */
     public setState(state: WorkflowState, message?: string): void {
         this.currentState = state;
-        this.lastUpdateTime = new Date();
+        this.lastActivityTime = new Date();
         this.updateStatusBar(message);
+    }
 
-        // Start or stop animation based on state
-        if (state === WorkflowState.Idle || state === WorkflowState.Paused ||
-            state === WorkflowState.Completed || state === WorkflowState.Error) {
-            this.stopAnimation();
-        } else {
-            this.startAnimation();
+    /**
+     * Update status bar items based on current state
+     * @param message Optional status message
+     */
+    private updateStatusBar(message?: string): void {
+        if (!this.playPauseButton || !this.stopButton || !this.restartButton || !this.stateLabel) {
+            return;
         }
 
-        // Show notification for state changes
-        if (message) {
-            this.showStateNotification(state, message);
-        }
+        // Update all status bar items
+        switch (this.currentState) {
+            case WorkflowState.Idle:
+                this.playPauseButton.text = "$(play) Play";
+                this.playPauseButton.tooltip = "Start Marco AI workflow";
+                this.stopButton.text = "$(debug-stop) Stop";
+                this.stopButton.tooltip = "Stop Marco AI workflow";
+                this.restartButton.text = "$(debug-restart) Restart";
+                this.restartButton.tooltip = "Restart Marco AI workflow";
+                this.stateLabel.text = `$(info) Marco AI: ${message || 'Ready'}`;
 
-        // Notify listeners of the state change
-        this.notifyStateChangeListeners(state, message);
+                this.showPlayPauseButton(true);
+                this.showStopButton(false);
+                this.showRestartButton(false);
+                break;
+
+            case WorkflowState.Paused:
+                this.playPauseButton.text = "$(play) Resume";
+                this.playPauseButton.tooltip = "Resume Marco AI workflow";
+                this.stateLabel.text = `$(pause) Marco AI: ${message || 'Paused'}`;
+
+                this.showPlayPauseButton(true);
+                this.showStopButton(true);
+                this.showRestartButton(true);
+                break;
+
+            case WorkflowState.Completed:
+                this.stateLabel.text = `$(check) Marco AI: ${message || 'Completed'}`;
+
+                this.showPlayPauseButton(false);
+                this.showStopButton(false);
+                this.showRestartButton(true);
+                break;
+
+            case WorkflowState.Error:
+                this.stateLabel.text = `$(error) Marco AI: ${message || 'Error'}`;
+
+                this.showPlayPauseButton(false);
+                this.showStopButton(false);
+                this.showRestartButton(true);
+                break;
+
+            default:
+                // Any active state
+                this.playPauseButton.text = "$(pause) Pause";
+                this.playPauseButton.tooltip = "Pause Marco AI workflow";
+                this.stopButton.text = "$(debug-stop) Stop";
+                this.stopButton.tooltip = "Stop Marco AI workflow";
+                this.restartButton.text = "$(debug-restart) Restart";
+                this.restartButton.tooltip = "Restart Marco AI workflow";
+
+                // Show state-specific icon
+                let icon = "$(loading~spin)";
+                switch (this.currentState) {
+                    case WorkflowState.Initializing:
+                        icon = "$(loading~spin)";
+                        break;
+                    case WorkflowState.CreatingBranch:
+                        icon = "$(git-branch)";
+                        break;
+                    case WorkflowState.SendingTask:
+                        icon = "$(comment)";
+                        break;
+                    case WorkflowState.RequestingTests:
+                        icon = "$(beaker)";
+                        break;
+                    case WorkflowState.VerifyingChecklist:
+                        icon = "$(checklist)";
+                        break;
+                    case WorkflowState.ContinuingIteration:
+                        icon = "$(sync)";
+                        break;
+                }
+
+                this.stateLabel.text = `${icon} Marco AI: ${message || this.currentState}`;
+
+                this.showPlayPauseButton(true);
+                this.showStopButton(true);
+                this.showRestartButton(true);
+                break;
+        }
+    }
+
+    /**
+     * Show or hide the play/pause button
+     * @param show Whether to show the button
+     */
+    private showPlayPauseButton(show: boolean): void {
+        if (this.playPauseButton) {
+            if (show) {
+                this.playPauseButton.show();
+            } else {
+                this.playPauseButton.hide();
+            }
+        }
+    }
+
+    /**
+     * Show or hide the stop button
+     * @param show Whether to show the button
+     */
+    private showStopButton(show: boolean): void {
+        if (this.stopButton) {
+            if (show) {
+                this.stopButton.show();
+            } else {
+                this.stopButton.hide();
+            }
+        }
+    }
+
+    /**
+     * Show or hide the restart button
+     * @param show Whether to show the button
+     */
+    private showRestartButton(show: boolean): void {
+        if (this.restartButton) {
+            if (show) {
+                this.restartButton.show();
+            } else {
+                this.restartButton.hide();
+            }
+        }
     }
 
     /**
      * Get the current workflow state
+     * @returns The current workflow state
      */
-    public getState(): WorkflowState {
+    public getCurrentState(): WorkflowState {
         return this.currentState;
     }
 
     /**
-     * Register a listener for state changes
-     * @param listener The callback function to be called when the state changes
+     * Get the time of the last activity
+     * @returns The last activity time or null if no activity has occurred
      */
-    public onStateChanged(listener: StateChangeListener): vscode.Disposable {
-        this.stateChangeListeners.push(listener);
-
-        // Return a disposable to remove the listener
-        return {
-            dispose: () => {
-                const index = this.stateChangeListeners.indexOf(listener);
-                if (index !== -1) {
-                    this.stateChangeListeners.splice(index, 1);
-                }
-            }
-        };
-    }
-
-    /**
-     * Notify all listeners of a state change
-     */
-    private notifyStateChangeListeners(state: WorkflowState, message?: string): void {
-        for (const listener of this.stateChangeListeners) {
-            listener(state, message);
-        }
-    }
-
-    /**
-     * Update the status bar display
-     */
-    private updateStatusBar(message?: string): void {
-        const stateEmoji = this.getStateEmoji();
-        const stateName = this.formatStateName(this.currentState);
-        const elapsedTime = this.getElapsedTime();
-
-        if (message) {
-            this.statusBarItem.text = `${stateEmoji} Marco: ${stateName} - ${message} ${elapsedTime}`;
-        } else {
-            this.statusBarItem.text = `${stateEmoji} Marco: ${stateName} ${elapsedTime}`;
-        }
-
-        this.statusBarItem.tooltip = `Marco AI - Current state: ${stateName}\nLast updated: ${this.lastUpdateTime.toLocaleTimeString()}`;
-        this.setStatusBarColor();
-    }
-
-    /**
-     * Format the state enum name for display
-     */
-    private formatStateName(state: WorkflowState): string {
-        return state.replace(/-/g, ' ')
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    }
-
-    /**
-     * Get emoji representation for the current state
-     */
-    private getStateEmoji(): string {
-        switch (this.currentState) {
-            case WorkflowState.Idle: return '$(debug-pause)';
-            case WorkflowState.Initializing: return '$(sync)';
-            case WorkflowState.CreatingBranch: return '$(git-branch)';
-            case WorkflowState.SendingTask: return '$(arrow-right)';
-            case WorkflowState.CheckingStatus: return '$(question)';
-            case WorkflowState.RequestingTests: return '$(beaker)';
-            case WorkflowState.VerifyingCompletion: return '$(checklist)';
-            case WorkflowState.Paused: return '$(debug-pause)';
-            case WorkflowState.Completed: return '$(check)';
-            case WorkflowState.Error: return '$(error)';
-            default: return '$(question)';
-        }
-    }
-
-    /**
-     * Set status bar color based on state
-     */
-    private setStatusBarColor(): void {
-        switch (this.currentState) {
-            case WorkflowState.Error:
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-                break;
-            case WorkflowState.Completed:
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-                break;
-            case WorkflowState.Paused:
-                this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-                break;
-            default:
-                this.statusBarItem.backgroundColor = undefined;
-                break;
-        }
-    }
-
-    /**
-     * Calculate elapsed time since last state change
-     */
-    private getElapsedTime(): string {
-        const now = new Date();
-        const elapsed = Math.floor((now.getTime() - this.lastUpdateTime.getTime()) / 1000);
-
-        if (elapsed < 60) {
-            return `(${elapsed}s)`;
-        } else {
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            return `(${minutes}m ${seconds}s)`;
-        }
-    }
-
-    /**
-     * Start animation for active states
-     */
-    private startAnimation(): void {
-        if (this.animationInterval) {
-            clearInterval(this.animationInterval);
-        }
-
-        this.animationInterval = setInterval(() => {
-            this.animationIndex = (this.animationIndex + 1) % this.animationFrames.length;
-            this.updateStatusBar();
-        }, 100);
-    }
-
-    /**
-     * Stop animation
-     */
-    private stopAnimation(): void {
-        if (this.animationInterval) {
-            clearInterval(this.animationInterval);
-            this.animationInterval = undefined;
-        }
-    }
-
-    /**
-     * Show a notification for state changes
-     */
-    private showStateNotification(state: WorkflowState, message: string): void {
-        switch (state) {
-            case WorkflowState.Error:
-                vscode.window.showErrorMessage(`Marco AI: ${message}`);
-                break;
-            case WorkflowState.Completed:
-                vscode.window.showInformationMessage(`Marco AI: ${message}`);
-                break;
-            case WorkflowState.Paused:
-                vscode.window.showWarningMessage(`Marco AI: ${message}`);
-                break;
-            default:
-                // Don't show notifications for normal state transitions
-                break;
-        }
-    }
-
-    /**
-     * Dispose the status bar item
-     */
-    public dispose(): void {
-        this.stopAnimation();
-        this.statusBarItem.dispose();
+    public getLastActivityTime(): Date | null {
+        return this.lastActivityTime;
     }
 }
