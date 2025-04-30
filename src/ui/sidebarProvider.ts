@@ -1,21 +1,22 @@
 import * as vscode from 'vscode';
-import { StatusManager, WorkflowState } from '../statusManager';
-import { getNonce } from '../utils/helpers';
-import { isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, stopWorkflow } from '../workflows/workflowManager';
+import { isWorkflowPaused, isWorkflowRunning } from '../workflows/workflowManager';
 
 /**
- * SidebarProvider for Marco AI webview panel
+ * Provides the webview content for the Marco AI sidebar
  */
 export class SidebarProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'marco-ai.sidebar';
     private _view?: vscode.WebviewView;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _context: vscode.ExtensionContext
-    ) { }
+    ) {}
 
-    resolveWebviewView(
+    /**
+     * Called when the webview is first created
+     * @param webviewView The webview view to initialize
+     */
+    public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
@@ -24,210 +25,157 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri],
+            localResourceRoots: [this._extensionUri]
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        // Handle messages from the webview
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case 'toggleWorkflow': {
-                    if (isWorkflowRunning()) {
-                        stopWorkflow();
-                        await this._updateToggleButtonState(false);
-                    } else {
-                        runWorkflow(this._context, 'play');
-                        await this._updateToggleButtonState(true);
-                    }
-                    break;
-                }
-                case 'pauseWorkflow': {
-                    if (isWorkflowRunning()) {
-                        pauseWorkflow();
-                    } else {
-                        resumeWorkflow(this._context);
-                    }
-                    break;
-                }
-                case 'restartWorkflow': {
-                    runWorkflow(this._context, 'restart');
-                    await this._updateToggleButtonState(true);
-                    break;
-                }
-                case 'updateConfig': {
-                    const config = vscode.workspace.getConfiguration('marco');
-                    await config.update(data.key, data.value, vscode.ConfigurationTarget.Global);
-                    break;
-                }
-                case 'userInput': {
-                    // Store user input in context for use in workflow
-                    this._context.workspaceState.update('marco.userInput', data.value);
-                    break;
-                }
-                case 'getConfigValues': {
-                    // Send current config values to the webview
-                    const config = vscode.workspace.getConfiguration('marco');
-                    this._view?.webview.postMessage({
-                        type: 'configValues',
-                        initCreateBranch: config.get('initCreateBranch'),
-                        needToWriteTest: config.get('needToWriteTest'),
-                        agentMode: config.get('agentMode') || 'Agent',
-                        workflowRunning: isWorkflowRunning()
-                    });
-                    break;
-                }
-            }
-        });
+        // Set up message handling
+        this._setWebviewMessageListener(webviewView.webview);
 
-        // Update the sidebar with current status when workflow state changes
-        const statusManager = StatusManager.getInstance();
-        statusManager.onStateChanged((state) => {
+        // Update sidebar state regularly
+        const updateInterval = setInterval(() => {
             if (this._view) {
-                this._view.webview.postMessage({
-                    type: 'stateUpdate',
-                    state: state,
-                    isRunning: isWorkflowRunning(),
-                    isPaused: state === WorkflowState.Paused
-                });
+                this.updateSidebarState();
+            } else {
+                clearInterval(updateInterval);
             }
+        }, 1000);
+
+        // Clear interval when webview is disposed
+        webviewView.onDidDispose(() => {
+            clearInterval(updateInterval);
         });
     }
 
     /**
-     * Update the play/stop toggle button state in the webview
+     * Update the sidebar state to reflect current workflow status
      */
-    private async _updateToggleButtonState(isRunning: boolean) {
-        if (this._view) {
-            this._view.webview.postMessage({
-                type: 'workflowToggle',
-                isRunning
-            });
+    private updateSidebarState() {
+        if (!this._view) {
+            return;
         }
+
+        // Get current workflow state
+        const state = {
+            isRunning: isWorkflowRunning(),
+            isPaused: isWorkflowPaused()
+        };
+
+        // Send state update to webview
+        this._view.webview.postMessage({
+            type: 'update-state',
+            data: state
+        });
     }
 
     /**
-     * Generate HTML for the sidebar webview
+     * Set up message listeners for the webview
+     * @param webview The webview to listen to messages from
      */
-    private _getHtmlForWebview(webview: vscode.Webview) {
+    private _setWebviewMessageListener(webview: vscode.Webview) {
+        webview.onDidReceiveMessage(
+            (message) => {
+                switch (message.command) {
+                    case 'play':
+                        vscode.commands.executeCommand('marco.toggleWorkflow');
+                        break;
+                    case 'pause':
+                        vscode.commands.executeCommand('marco.pauseWorkflow');
+                        break;
+                    case 'stop':
+                        vscode.commands.executeCommand('marco.toggleWorkflow');
+                        break;
+                    case 'restart':
+                        vscode.commands.executeCommand('marco.restart');
+                        break;
+                    case 'toggleBackground':
+                        vscode.commands.executeCommand('marco.toggleBackgroundMode');
+                        break;
+                }
+            },
+            undefined,
+            this._context.subscriptions
+        );
+    }
+
+    /**
+     * Generate the HTML for the webview
+     * @param webview The webview to generate HTML for
+     * @returns The HTML content
+     */
+    private _getHtmlForWebview(webview: vscode.Webview): string {
+        // Get the local path to main script and convert to webview uri
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'sidebar.js')
         );
 
-        const styleUri = webview.asWebviewUri(
+        // Get the local path to CSS styles
+        const stylesUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', 'sidebar.css')
         );
 
-        const codiconsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
-        );
-
-        // Use a nonce to only allow a specific script to be run
-        const nonce = getNonce();
+        // Use a nonce to only allow specific scripts to be run
+        const nonce = this._getNonce();
 
         return `<!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-        <link href="${styleUri}" rel="stylesheet">
-        <link href="${codiconsUri}" rel="stylesheet">
-        <title>Marco AI</title>
-      </head>
-      <body>
-        <header>
-          <h1>Marco AI</h1>
-          <div class="status-indicator">
-            <span id="status-icon" class="codicon codicon-debug-pause"></span>
-            <span id="status-text">Idle</span>
-          </div>
-        </header>
-        
-        <section class="controls">
-          <div class="buttons">
-            <button id="toggleBtn" class="primary-button">
-              <span class="codicon codicon-debug-start"></span>
-              <span id="toggleBtnText">Start Workflow</span>
-            </button>
-            <button id="pauseBtn" disabled>
-              <span class="codicon codicon-debug-pause"></span>
-              <span>Pause</span>
-            </button>
-            <button id="restartBtn">
-              <span class="codicon codicon-debug-restart"></span>
-              <span>Restart</span>
-            </button>
-          </div>
-        </section>
-        
-        <section class="config">
-          <h2>Configuration</h2>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="initCreateBranch" />
-              Create Git branch on start
-            </label>
-          </div>
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="needToWriteTest" />
-              Include test writing steps
-            </label>
-          </div>
-          <div class="form-group">
-            <label for="agentMode">Agent Mode:</label>
-            <select id="agentMode">
-              <option value="Agent">Agent</option>
-              <option value="Edit">Edit</option>
-              <option value="Ask">Ask</option>
-            </select>
-          </div>
-        </section>
-        
-        <section class="user-input">
-          <h2>Task Description</h2>
-          <div class="form-group">
-            <textarea id="taskDescription" rows="5" placeholder="Describe the task for Marco AI..."></textarea>
-          </div>
-          <button id="saveTaskBtn" class="primary-button">
-            <span class="codicon codicon-save"></span>
-            <span>Save Task</span>
-          </button>
-        </section>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link href="${stylesUri}" rel="stylesheet">
+                <title>Marco AI</title>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Marco AI Controls</h2>
+                    
+                    <div class="controls">
+                        <button id="playBtn" class="control-btn">
+                            <span class="icon play-icon">▶</span> Play
+                        </button>
+                        <button id="pauseBtn" class="control-btn">
+                            <span class="icon pause-icon">⏸</span> Pause
+                        </button>
+                        <button id="stopBtn" class="control-btn">
+                            <span class="icon stop-icon">⏹</span> Stop
+                        </button>
+                        <button id="restartBtn" class="control-btn">
+                            <span class="icon restart-icon">↻</span> Restart
+                        </button>
+                    </div>
+                    
+                    <div class="settings">
+                        <h3>Settings</h3>
+                        <div class="setting-item">
+                            <label class="setting-label">
+                                <input type="checkbox" id="backgroundMode"> Background Mode
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="status" id="statusDisplay">
+                        <h3>Status</h3>
+                        <div id="statusText">Idle</div>
+                    </div>
+                </div>
+                
+                <script nonce="${nonce}" src="${scriptUri}"></script>
+            </body>
+            </html>`;
+    }
 
-        <section class="workflow-state">
-          <h2>Workflow Progress</h2>
-          <div class="progress-container">
-            <div class="progress-step" data-state="initializing">
-              <div class="step-indicator"></div>
-              <div class="step-label">Initializing</div>
-            </div>
-            <div class="progress-step" data-state="creating-branch">
-              <div class="step-indicator"></div>
-              <div class="step-label">Branch Setup</div>
-            </div>
-            <div class="progress-step" data-state="sending-task">
-              <div class="step-indicator"></div>
-              <div class="step-label">Send Task</div>
-            </div>
-            <div class="progress-step" data-state="requesting-tests">
-              <div class="step-indicator"></div>
-              <div class="step-label">Tests</div>
-            </div>
-            <div class="progress-step" data-state="verifying-completion">
-              <div class="step-indicator"></div>
-              <div class="step-label">Verification</div>
-            </div>
-            <div class="progress-step" data-state="completed">
-              <div class="step-indicator"></div>
-              <div class="step-label">Complete</div>
-            </div>
-          </div>
-        </section>
-
-        <script nonce="${nonce}" src="${scriptUri}"></script>
-      </body>
-      </html>`;
+    /**
+     * Generate a random nonce string for security
+     * @returns A random nonce string
+     */
+    private _getNonce(): string {
+        let text = '';
+        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        for (let i = 0; i < 32; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+        return text;
     }
 }

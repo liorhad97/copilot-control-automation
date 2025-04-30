@@ -1,7 +1,7 @@
 {
   "name": "marco-ai",
   "displayName": "Marco AI",
-  "description": "Automate your AI workflows in VS Code",
+  "description": "Marco AI automates AI-assisted development workflows using GitHub Copilot",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.99.0"
@@ -9,17 +9,93 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "marco.toggleWorkflow",
+        "title": "Marco AI: Play/Stop",
+        "icon": "$(play)"
+      },
+      {
+        "command": "marco.pauseWorkflow",
+        "title": "Marco AI: Pause/Resume",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "marco.restart",
+        "title": "Marco AI: Restart",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "marco.openChat",
+        "title": "Marco AI: Open Copilot Chat",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "marco.openSidebar",
+        "title": "Marco AI: Open Sidebar",
+        "icon": "$(layout-panel-left)"
+      },
+      {
+        "command": "marco.toggleBackgroundMode",
+        "title": "Marco AI: Toggle Background Mode",
+        "icon": "$(eye)"
+      }
+    ],
+    "configuration": {
+      "title": "Marco AI",
+      "properties": {
+        "marco.initCreateBranch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically create a new Git branch when starting a workflow"
+        },
+        "marco.needToWriteTest": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include test-writing steps in the development workflow"
+        },
+        "marco.backgroundMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run workflows in background mode (minimize windows when possible)"
+        },
+        "marco.preferredModels": {
+          "type": "array",
+          "default": ["Claude 3.7 Sonnet", "Gemini 2.5", "GPT 4.1"],
+          "description": "Ordered list of preferred AI models to use (first available will be selected)"
+        },
+        "marco.agentMode": {
+          "type": "string",
+          "default": "Agent",
+          "enum": ["Agent", "Edit", "Ask"],
+          "description": "Mode to use when instructing the AI agent"
+        },
+        "marco.checkAgentFrequency": {
+          "type": "number",
+          "default": 10000,
+          "description": "How often to check if the agent is still active (in milliseconds)"
+        },
+        "marco.ensureChatFrequency": {
+          "type": "number",
+          "default": 300000,
+          "description": "How often to ensure the chat window is open during a workflow (in milliseconds)"
+        },
+        "marco.idleTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "description": "Number of seconds of inactivity before considering the agent idle"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
           "id": "marco-ai-sidebar",
           "title": "Marco AI",
-          "icon": "$(rocket)"
+          "icon": "media/icon.svg"
         }
       ]
     },
@@ -28,89 +104,34 @@
         {
           "type": "webview",
           "id": "marco-ai.sidebar",
-          "name": "Marco AI Dashboard",
-          "icon": "$(dashboard)"
+          "name": "Controls",
+          "icon": "media/icon.svg"
         }
       ]
     },
-    "commands": [
-      {
-        "command": "marco.toggleWorkflow",
-        "title": "Marco AI: Toggle Workflow Play/Stop"
-      },
-      {
-        "command": "marco.pauseWorkflow",
-        "title": "Marco AI: Pause/Resume Workflow"
-      },
-      {
-        "command": "marco.restart",
-        "title": "Marco AI: Restart Workflow"
-      },
-      {
-        "command": "marco.openChat",
-        "title": "Marco AI: Open Copilot Chat"
-      },
-      {
-        "command": "marco.openSidebar",
-        "title": "Marco AI: Open Dashboard"
-      },
-      {
-        "command": "marco.checkAgentAlive",
-        "title": "Marco AI: Check if Agent is Active"
-      }
-    ],
-    "configuration": {
-      "type": "object",
-      "title": "Marco AI Settings",
-      "properties": {
-        "marco.initCreateBranch": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable branch creation in initial setup"
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "marco.toggleWorkflow",
+          "when": "editorFocus"
         },
-        "marco.needToWriteTest": {
-          "type": "boolean",
-          "default": false,
-          "description": "Include test-writing steps"
+        {
+          "command": "marco.pauseWorkflow",
+          "when": "editorFocus"
         },
-        "marco.backgroundMode": {
-          "type": "boolean",
-          "default": false,
-          "description": "Run Marco workflow in background mode, minimizing focus changes to the Copilot chat"
+        {
+          "command": "marco.restart",
+          "when": "editorFocus"
         },
-        "marco.agentMode": {
-          "type": "string",
-          "enum": [
-            "Agent",
-            "Edit",
-            "Ask"
-          ],
-          "default": "Agent",
-          "description": "Set the operating mode for the Copilot agent"
+        {
+          "command": "marco.openChat",
+          "when": "editorFocus"
         },
-        "marco.preferredModels": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "Claude 3.7 Sonnet",
-            "Gemini 2.5",
-            "GPT 4.1"
-          ],
-          "description": "Preferred AI models in order of priority"
-        },
-        "marco.checkAgentFrequency": {
-          "type": "number",
-          "default": 10000,
-          "description": "How often to check if the agent is idle (in milliseconds)"
-        },
-        "marco.ensureChatFrequency": {
-          "type": "number",
-          "default": 300000,
-          "description": "How often to ensure the chat is open (in milliseconds)"
+        {
+          "command": "marco.openSidebar",
+          "when": "editorFocus"
         }
-      }
+      ]
     }
   },
   "scripts": {
@@ -121,22 +142,21 @@
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src",
+    "lint": "eslint src --ext ts",
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
     "@types/vscode": "^1.99.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
-    "@typescript-eslint/eslint-plugin": "^8.28.0",
-    "@typescript-eslint/parser": "^8.28.0",
-    "eslint": "^9.23.0",
-    "typescript": "^5.8.2",
-    "ts-loader": "^9.5.2",
-    "webpack": "^5.98.0",
-    "webpack-cli": "^6.0.1",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "@vscode/codicons": "^0.0.35"
-  }
-}
+    "@typescript-eslint/eslint-plugin": "^7.1.1",
+    "@typescript-eslint/parser": "^7.1.1",
+    "@vscode/test-cli": "^0.0.6",
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.57.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.3",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {}
