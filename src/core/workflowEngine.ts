@@ -202,7 +202,9 @@ export class WorkflowEngine {
             const agentMode = config.get<string>('agentMode', 'Agent');
             
             this.statusManager.setState(WorkflowState.SendingTask, "Setting agent mode");
-            await this.agentManager.sendChatMessage(`I'll be working in ${agentMode} mode for this task.`);
+            // Load agent mode prompt from file
+            const agentModePrompt = await this.promptManager.getPrompt('agent_mode.md');
+            await this.agentManager.sendChatMessage(agentModePrompt.replace('{{agent_mode}}', agentMode));
 
             // 3. Select Agent LLM
             const preferredModels = config.get<string[]>('preferredModels') || 
@@ -220,9 +222,11 @@ export class WorkflowEngine {
                     }
                 }
 
-                // Inform about preferred models
-                const modelPriorityMessage = `I'll be using the most capable model available in this priority order: ${preferredModels.join(' > ')}.`;
-                await this.agentManager.sendChatMessage(modelPriorityMessage);
+                // Load model selection prompt
+                const modelPrompt = await this.promptManager.getPrompt('model_selection.md');
+                await this.agentManager.sendChatMessage(
+                    modelPrompt.replace('{{models}}', preferredModels.join(' > '))
+                );
             }
 
             await this.checkContinue();
@@ -233,7 +237,11 @@ export class WorkflowEngine {
                 this.statusManager.setState(WorkflowState.CreatingBranch, "Creating new branch");
                 const branchName = await this.gitManager.createAndCheckoutBranch();
                 if (branchName) {
-                    await this.agentManager.sendChatMessage(`Created and checked out branch: ${branchName}. Please click Continue when ready.`);
+                    // Load branch created prompt
+                    const branchPrompt = await this.promptManager.getPrompt('branch_created.md');
+                    await this.agentManager.sendChatMessage(
+                        branchPrompt.replace('{{branch_name}}', branchName)
+                    );
                 }
                 await sleep(2000);
             }
@@ -347,12 +355,13 @@ export class WorkflowEngine {
      * @returns Promise resolving to true if the workflow should continue, false otherwise
      */
     private async shouldContinueToNextIteration(): Promise<boolean> {
-        // Ask the agent directly if it has completed the current task
-        await this.agentManager.sendChatMessage("Have you completed implementing all the features described in the checklist?");
+        // Get prompt for querying completion status
+        const completionPrompt = await this.promptManager.getPrompt('completion_check.md');
+        await this.agentManager.sendChatMessage(completionPrompt);
         
         // This is a simplified placeholder implementation
         // In a real implementation, we would analyze the agent's response
-        // For now, only loop once per run
+        // For demonstration, we'll loop at least once
         return this.iterationCount === 0;
     }
 }
