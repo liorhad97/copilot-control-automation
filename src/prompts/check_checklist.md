@@ -1,17 +1,14 @@
 # Checklist Verification
 
-We need to ensure all requirements have been completed for this task. Please review the following checklist and confirm the status of each item:
+Let's review the development checklist to see what's been completed and what remains:
 
-1. Code implementation is complete and functional
-2. All edge cases and error conditions are properly handled
-3. Code follows existing architecture patterns and best practices
-4. Documentation is complete and up-to-date
-5. Tests have been implemented (if required)
-6. No regressions have been introduced
+Please go through each item on the checklist and mark it as completed or in progress. For any incomplete items, please provide a brief explanation of what remains to be done.
 
-For each item, please respond with:
-- ✅ Complete
-- ⚠️ Partially Complete
-- ❌ Not Complete
+If all items are complete, please provide a final summary of the feature implementation including:
 
-If any items are not complete, please explain what remains to be done. If all items are complete, confirm that the task is ready for review.
+1. Key components implemented
+2. How the implementation meets the requirements
+3. Any notable design decisions
+4. Recommendations for potential future improvements
+
+This information will help determine if we need another iteration or if the feature is ready for review.

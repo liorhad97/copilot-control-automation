@@ -1,24 +1,13 @@
-# Marco AI Initial Task
+# Initial Development Task
 
-I need your help with a development task. Please follow these instructions:
+Please start working on implementing the feature according to the checklist I'll provide. This is a structured development workflow where we'll proceed in steps.
 
-1. First, analyze the current codebase to understand the structure and functionality.
-2. Identify the key components and how they interact with each other.
-3. Based on the analysis, implement the required feature or fix the issue.
-4. Follow best practices for code style, documentation, and error handling.
-5. Make sure your changes are compatible with the existing codebase.
-6. Test your changes to ensure they work as expected.
+First, please analyze the requirements, then plan your implementation approach, and finally begin coding. After each major step, I'll check in on your progress.
 
-## Task Description
+As you work, please follow these guidelines:
+- Comment your code clearly
+- Follow established coding patterns in the project
+- Consider edge cases and error handling
+- Keep the implementation maintainable and readable
 
-${taskDescription}
-
-## Implementation Guidelines
-
-- Keep the code clean, maintainable, and well-documented
-- Follow the existing architectural patterns
-- Make incremental changes and test as you go
-- Consider edge cases and add appropriate error handling
-- Use modern best practices for the language/framework being used
-
-When you're ready to start, please respond with a brief summary of your understanding and initial approach.
+Please confirm when you're ready to begin, and I'll provide the specific checklist for this task.

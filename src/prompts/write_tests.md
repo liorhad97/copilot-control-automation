@@ -1,14 +1,11 @@
-# Write Tests
+# Test Development Request
 
-Please write tests for the code you've implemented. Follow these guidelines:
+Now that you've made good progress on the implementation, let's focus on writing tests. Please create appropriate tests for the code you've implemented so far.
 
-1. Create comprehensive test coverage for all new functionality
-2. Include both positive tests (expected behavior) and negative tests (error handling)
-3. Use the existing testing framework and follow established patterns in the codebase
-4. Test edge cases and potential failure scenarios
-5. Ensure tests are descriptive and clearly indicate what is being tested
-6. Verify that all tests pass before considering the implementation complete
+Include the following test types as appropriate:
 
-If you encounter any test failures, please fix the underlying issues in the implementation.
+1. **Unit Tests**: For individual functions and methods
+2. **Integration Tests**: If the feature interacts with other components
+3. **Edge Case Tests**: For boundary conditions and error scenarios
 
-When complete, provide a summary of the test coverage and any insights gained from the testing process.
+Make sure your tests are thorough, readable, and correctly verify the expected behavior of the implementation.
