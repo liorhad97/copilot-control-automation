@@ -14,7 +14,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Preload common prompts
 	const promptManager = PromptManager.getInstance();
-	promptManager.preloadCommonPrompts();
+	promptManager.preloadCommonPrompts().catch(err => {
+		console.error('Failed to preload prompts:', err);
+	});
 
 	// Create sidebar
 	const sidebarProvider = new SidebarProvider(context.extensionUri, context);
@@ -94,13 +96,26 @@ function registerCommands(context: vscode.ExtensionContext) {
 			if (isWorkflowRunning() && !isWorkflowPaused()) {
 				const idle = isAgentIdle();
 				if (idle) {
-					// Get background mode configuration
-					const config = vscode.workspace.getConfiguration('marco');
-					const backgroundMode = config.get<boolean>('backgroundMode') || false;
+					try {
+						// Get background mode configuration
+						const config = vscode.workspace.getConfiguration('marco');
+						const backgroundMode = config.get<boolean>('backgroundMode') || false;
 
-					// Send prompt to idle agent
-					const agentManager = AgentManager.getInstance();
-					await agentManager.sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
+						// Load the idle check prompt
+						const promptManager = PromptManager.getInstance();
+						const idlePrompt = await promptManager.getPrompt('idle_check.md');
+
+						// Send prompt to idle agent
+						const agentManager = AgentManager.getInstance();
+						await agentManager.sendChatMessage(idlePrompt, backgroundMode);
+					} catch (error) {
+						console.error('Error sending idle check prompt:', error);
+						// Fall back to hardcoded message if prompt loading fails
+						const agentManager = AgentManager.getInstance();
+						const config = vscode.workspace.getConfiguration('marco');
+						const backgroundMode = config.get<boolean>('backgroundMode') || false;
+						await agentManager.sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
+					}
 				}
 			}
 		})
@@ -177,5 +192,8 @@ function setupMonitoringTimers(context: vscode.ExtensionContext) {
 
 export function deactivate() {
 	console.log('Marco AI extension is now deactivated');
-	// Any cleanup logic goes here
+	
+	// Clean up status manager
+	const statusManager = StatusManager.getInstance();
+	statusManager.dispose();
 }
