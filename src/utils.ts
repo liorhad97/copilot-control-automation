@@ -1,30 +1,62 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 /**
- * Helper function to execute file-related operations through git commands
- * @param command Git command to execute
- * @returns Promise resolving to command output
+ * Get the root path of the current workspace
+ * @returns The workspace root path or undefined if not available
  */
-export async function executeGitCommand(command: string): Promise<string> {
-    try {
-        // Execute command using the VS Code terminal API
-        const terminal = vscode.window.createTerminal('Marco AI Git');
-        terminal.sendText(command);
-        terminal.dispose(); // Close the terminal after execution
+export function getWorkspaceRoot(): string | undefined {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return undefined;
+    }
+    
+    return workspaceFolders[0].uri.fsPath;
+}
 
-        return 'Command executed';
+/**
+ * Check if a command exists in VS Code
+ * @param commandId The ID of the command to check
+ * @returns Promise resolving to true if the command exists
+ */
+export async function commandExists(commandId: string): Promise<boolean> {
+    try {
+        const commands = await vscode.commands.getCommands(true);
+        return commands.includes(commandId);
     } catch (error) {
-        console.error('Error executing git command:', error);
-        return 'Error: ' + error;
+        console.error(`Error checking if command ${commandId} exists:`, error);
+        return false;
     }
 }
 
 /**
- * Get the workspace root path
+ * Get the extension's path to resources
+ * @param context The extension context
+ * @param relativePath The relative path within the extension
+ * @returns The full path to the resource
  */
-export function getWorkspaceRoot(): string | undefined {
-    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-        return vscode.workspace.workspaceFolders[0].uri.fsPath;
+export function getExtensionResourcePath(context: vscode.ExtensionContext, relativePath: string): string {
+    return path.join(context.extensionPath, relativePath);
+}
+
+/**
+ * Log a message with timestamp
+ * @param message The message to log
+ * @param level The log level (log, warn, error)
+ */
+export function logWithTimestamp(message: string, level: 'log' | 'warn' | 'error' = 'log'): void {
+    const timestamp = new Date().toISOString();
+    const formattedMessage = `[${timestamp}] ${message}`;
+    
+    switch (level) {
+        case 'warn':
+            console.warn(formattedMessage);
+            break;
+        case 'error':
+            console.error(formattedMessage);
+            break;
+        default:
+            console.log(formattedMessage);
+            break;
     }
-    return undefined;
 }

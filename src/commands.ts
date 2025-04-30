@@ -1,98 +1,112 @@
 import * as vscode from 'vscode';
-import { ensureChatOpen, isAgentIdle, sendChatMessage } from './utils/chatUtils';
-import { isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow } from './workflows/workflowManager';
+import { StatusManager, WorkflowState } from './statusManager';
+import { PromptService } from './services/promptService';
+import { runWorkflow } from './workflow';
 
-export function registerCommands(context: vscode.ExtensionContext) {
-    // Command to toggle workflow (play/stop)
-    context.subscriptions.push(
-        vscode.commands.registerCommand('marco.toggleWorkflow', async () => {
-            if (isWorkflowRunning()) {
-                await stopWorkflow();
-            } else {
-                // Read configuration settings for workflow
-                const config = vscode.workspace.getConfiguration('marco');
-                const backgroundMode = config.get<boolean>('backgroundMode') || false;
+/**
+ * Register all commands for the extension
+ * @param context The extension context
+ */
+export function registerCommands(context: vscode.ExtensionContext): void {
+    // Main workflow control commands
+    registerWorkflowCommands(context);
+    
+    // Additional utility commands
+    registerUtilityCommands(context);
+}
 
-                // Set background mode before starting workflow
-                setBackgroundMode(backgroundMode);
+/**
+ * Register the main workflow control commands (play, pause, stop, restart)
+ * @param context The extension context
+ */
+function registerWorkflowCommands(context: vscode.ExtensionContext): void {
+    const commands = ['play', 'pause', 'stop', 'restart'];
+    
+    commands.forEach(action => {
+        context.subscriptions.push(
+            vscode.commands.registerCommand(`marco.${action}`, () => runWorkflow(context, action))
+        );
+    });
+}
 
-                await runWorkflow(context, 'play');
-            }
-        })
-    );
-
-    // Command to pause/resume workflow
-    context.subscriptions.push(
-        vscode.commands.registerCommand('marco.pauseWorkflow', () => {
-            if (isWorkflowRunning()) {
-                if (isWorkflowPaused()) {
-                    resumeWorkflow(context);
-                } else {
-                    pauseWorkflow();
-                }
-            }
-        })
-    );
-
-    // Command to restart workflow
-    context.subscriptions.push(
-        vscode.commands.registerCommand('marco.restart', async () => {
-            await runWorkflow(context, 'restart');
-        })
-    );
-
-    // Command to open Copilot Chat
-    context.subscriptions.push(
-        vscode.commands.registerCommand('marco.openChat', async () => {
-            await ensureChatOpen(5, 1000, true);
-        })
-    );
-
-    // Command to open the sidebar
-    context.subscriptions.push(
-        vscode.commands.registerCommand('marco.openSidebar', () => {
-            // Correct command to focus a view in the explorer panel
-            vscode.commands.executeCommand('workbench.view.explorer'); // Ensure explorer is visible
-            vscode.commands.executeCommand('marco-ai.sidebar.focus').then(undefined, err => {
-                // Fallback if the specific focus command doesn't work
-                console.warn('Could not focus marco-ai.sidebar directly, ensuring explorer is visible.', err);
-                vscode.commands.executeCommand('workbench.view.explorer');
-            });
-        })
-    );
-
-    // Command to check if agent is alive/active
+/**
+ * Register utility commands for the extension
+ * @param context The extension context
+ */
+function registerUtilityCommands(context: vscode.ExtensionContext): void {
+    // Command to manually check if agent is alive
     context.subscriptions.push(
         vscode.commands.registerCommand('marco.checkAgentAlive', async () => {
-            if (isWorkflowRunning() && !isWorkflowPaused()) {
-                const idle = await isAgentIdle(); // Assuming isAgentIdle is the correct check now
-                if (idle) {
-                    // Get background mode configuration
-                    const config = vscode.workspace.getConfiguration('marco');
-                    const backgroundMode = config.get<boolean>('backgroundMode') || false;
-
-                    // Send prompt to idle agent, using background mode setting
-                    await sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
-                }
-            }
+            await checkAgentAlive();
         })
     );
-
-    // Command to toggle background mode
+    
+    // Command to send a custom message to the chat
     context.subscriptions.push(
-        vscode.commands.registerCommand('marco.toggleBackgroundMode', async () => {
-            // Get current background mode setting
-            const config = vscode.workspace.getConfiguration('marco');
-            const currentBackgroundMode = config.get<boolean>('backgroundMode') || false;
-
-            // Toggle and update setting
-            await config.update('backgroundMode', !currentBackgroundMode, vscode.ConfigurationTarget.Global);
-
-            // Apply to current workflow if running
-            if (isWorkflowRunning()) {
-                setBackgroundMode(!currentBackgroundMode);
-                vscode.window.showInformationMessage(`Background mode ${!currentBackgroundMode ? 'enabled' : 'disabled'}`);
+        vscode.commands.registerCommand('marco.sendCustomMessage', async () => {
+            const message = await vscode.window.showInputBox({
+                prompt: 'Enter message to send to Copilot Chat',
+                placeHolder: 'Type your message here...'
+            });
+            
+            if (message) {
+                const promptService = PromptService.getInstance();
+                await promptService.sendMessage(message);
             }
         })
     );
+    
+    // Command to select preferred AI model
+    context.subscriptions.push(
+        vscode.commands.registerCommand('marco.selectModel', async () => {
+            const models = [
+                'Claude 3.7 Sonnet',
+                'Gemini 2.5',
+                'GPT 4.1'
+            ];
+            
+            const selectedModel = await vscode.window.showQuickPick(models, {
+                placeHolder: 'Select preferred AI model'
+            });
+            
+            if (selectedModel) {
+                vscode.window.showInformationMessage(`Selected model: ${selectedModel}`);
+                // Implementation of model selection would go here
+            }
+        })
+    );
+}
+
+/**
+ * Check if the agent is alive and prompt if idle
+ */
+async function checkAgentAlive(): Promise<void> {
+    const statusManager = StatusManager.getInstance();
+    const currentState = statusManager.getState();
+    
+    // Skip check for inactive states
+    if (currentState === WorkflowState.Idle ||
+        currentState === WorkflowState.Paused ||
+        currentState === WorkflowState.Error ||
+        currentState === WorkflowState.Completed) {
+        return;
+    }
+    
+    // Check if it's been a while since the last update
+    const lastActivityTime = statusManager.getLastUpdateTime();
+    if (!lastActivityTime) {
+        return;
+    }
+    
+    const config = vscode.workspace.getConfiguration('marco');
+    const idleTimeoutMs = config.get<number>('idleTimeoutSeconds', 30) * 1000;
+    
+    const timeSinceLastActivity = Date.now() - lastActivityTime.getTime();
+    if (timeSinceLastActivity > idleTimeoutMs) {
+        // Agent appears to be idle, prompt for an update
+        const promptService = PromptService.getInstance();
+        await promptService.sendMessage(
+            'Are you still working on the task? Please provide an update on your progress.'
+        );
+    }
 }
