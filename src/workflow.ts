@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { PromptManager } from './core/promptManager';
 import { StatusManager, WorkflowState } from './statusManager';
 import { ensureChatOpen, sendChatMessage } from './utils';
 
@@ -265,4 +266,36 @@ async function promptAgentForCompletion(): Promise<string | null> {
     // This would ideally capture and return the agent's response
     // For now, we're using a placeholder
     return null; // Placeholder implementation
+}
+
+/**
+ * Opens the Copilot Chat panel
+ * @returns Promise that resolves when chat is open
+ */
+async function openChat(): Promise<boolean> {
+    return ensureChatOpen(5, 1000, true);
+}
+
+/**
+ * Sends the contents of a prompt file to the Copilot Chat
+ * @param filename The name of the prompt file to send
+ * @returns Promise that resolves when the file content has been sent
+ */
+async function sendFileToChat(filename: string): Promise<void> {
+    try {
+        // Get the prompt manager instance
+        const promptManager = PromptManager.getInstance();
+
+        // Get the content of the prompt file
+        const content = await promptManager.getPrompt(filename);
+
+        // Ensure chat is open before sending the message
+        await openChat();
+
+        // Send the prompt content to the chat
+        await sendChatMessage(content);
+    } catch (error) {
+        console.error(`Error sending file ${filename} to chat:`, error);
+        throw error;
+    }
 }
