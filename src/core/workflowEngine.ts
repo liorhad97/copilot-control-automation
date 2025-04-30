@@ -7,6 +7,16 @@ import { StatusManager } from '../statusManager';
 import { sleep, WorkflowCancelledError } from '../utils/helpers';
 
 /**
+ * Error type for agent model errors that require switching models
+ */
+export class AgentModelError extends Error {
+    constructor(message = 'Agent model error occurred') {
+        super(message);
+        this.name = 'AgentModelError';
+    }
+}
+
+/**
  * Core workflow engine implementing the Marco AI abstracted workflow
  */
 export class WorkflowEngine {
@@ -18,6 +28,8 @@ export class WorkflowEngine {
     private promptManager: PromptManager;
     private statusManager: StatusManager;
     private gitManager: GitManager;
+    private currentModelIndex: number = 0;
+    private preferredModels: string[] = [];
 
     private constructor() {
         this.agentManager = AgentManager.getInstance();
@@ -73,6 +85,36 @@ export class WorkflowEngine {
     }
 
     /**
+     * Handles agent response errors by trying to switch to the next preferred model
+     * @returns True if successfully switched models, false if no more models to try
+     */
+    public async handleAgentError(): Promise<boolean> {
+        // If we don't have any models configured or have tried them all, we can't switch
+        if (this.preferredModels.length === 0 || this.currentModelIndex >= this.preferredModels.length - 1) {
+            return false;
+        }
+        
+        // Try the next model in the list
+        this.currentModelIndex++;
+        const nextModel = this.preferredModels[this.currentModelIndex];
+        
+        this.statusManager.setState(WorkflowState.Initializing, `Switching to model: ${nextModel}`);
+        
+        // Attempt to select the next model
+        if (await this.agentManager.selectModel(nextModel)) {
+            // Inform that we switched models
+            const switchPrompt = await this.promptManager.getPrompt('model_switch.md');
+            await this.agentManager.sendChatMessage(
+                switchPrompt.replace('{{model}}', nextModel)
+            );
+            
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
      * Pause the current workflow
      */
     public pauseWorkflow(): void {
@@ -108,6 +150,7 @@ export class WorkflowEngine {
         this.isRunning = false;
         this.isPaused = false;
         this.iterationCount = 0;
+        this.currentModelIndex = 0;
 
         this.statusManager.setState(WorkflowState.Idle, "Workflow stopped");
     }
@@ -135,6 +178,7 @@ export class WorkflowEngine {
                 this.isRunning = true;
                 this.isPaused = false;
                 this.iterationCount = 0;
+                this.currentModelIndex = 0;
 
                 // Get background mode setting
                 const config = vscode.workspace.getConfiguration('marco');
@@ -148,6 +192,17 @@ export class WorkflowEngine {
                 } catch (error) {
                     if (error instanceof WorkflowCancelledError) {
                         this.statusManager.setState(WorkflowState.Idle, "Workflow stopped");
+                    } else if (error instanceof AgentModelError) {
+                        // Try to handle agent model error
+                        if (await this.handleAgentError()) {
+                            // If successfully switched models, resume workflow
+                            this.statusManager.setState(WorkflowState.Initializing, "Resuming workflow with new model");
+                            await this.developmentWorkflow(context);
+                        } else {
+                            // Failed to switch models
+                            console.error('Failed to switch models after error:', error);
+                            this.statusManager.setState(WorkflowState.Error, `All models failed. Workflow stopped.`);
+                        }
                     } else {
                         console.error('Workflow error:', error);
                         this.statusManager.setState(WorkflowState.Error, `Workflow failed: ${error}`);
@@ -207,17 +262,19 @@ export class WorkflowEngine {
             await this.agentManager.sendChatMessage(agentModePrompt.replace('{{agent_mode}}', agentMode));
 
             // 3. Select Agent LLM
-            const preferredModels = config.get<string[]>('preferredModels') || 
+            this.preferredModels = config.get<string[]>('preferredModels') || 
                 ["Claude 3.7 Sonnet", "Gemini 2.5", "GPT 4.1"];
 
-            if (preferredModels.length > 0) {
+            if (this.preferredModels.length > 0) {
                 this.statusManager.setState(WorkflowState.SendingTask, "Selecting optimal AI model");
 
                 // Try models in order of preference
                 let modelSelected = false;
-                for (const model of preferredModels) {
+                for (const model of this.preferredModels) {
                     if (await this.agentManager.selectModel(model)) {
                         modelSelected = true;
+                        // Set the current model index to the one selected
+                        this.currentModelIndex = this.preferredModels.indexOf(model);
                         break;
                     }
                 }
@@ -225,7 +282,7 @@ export class WorkflowEngine {
                 // Load model selection prompt
                 const modelPrompt = await this.promptManager.getPrompt('model_selection.md');
                 await this.agentManager.sendChatMessage(
-                    modelPrompt.replace('{{models}}', preferredModels.join(' > '))
+                    modelPrompt.replace('{{models}}', this.preferredModels.join(' > '))
                 );
             }
 
@@ -248,6 +305,12 @@ export class WorkflowEngine {
 
         } catch (error) {
             if (error instanceof WorkflowCancelledError) {
+                throw error;
+            }
+
+            // Check if it's a model error that we can recover from
+            if (error instanceof AgentModelError) {
+                // Let the higher level handle it
                 throw error;
             }
 
@@ -342,6 +405,12 @@ export class WorkflowEngine {
             }
         } catch (error) {
             if (error instanceof WorkflowCancelledError) {
+                throw error;
+            }
+            
+            // Check if it's a model error that we can recover from
+            if (error instanceof AgentModelError) {
+                // Let the higher level handle it
                 throw error;
             }
             
