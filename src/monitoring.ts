@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from './statusManager';
 import { ensureChatOpen, isAgentWorking } from './utils/chatUtils';
 import { PromptService } from './services/promptService';
+import { WorkflowManager } from './services/workflowManager';
 
 /**
  * Class responsible for monitoring the agent's status
@@ -12,10 +13,12 @@ export class AgentMonitor {
     private ensureChatIntervalId: NodeJS.Timeout | undefined;
     private statusManager: StatusManager;
     private promptService: PromptService;
+    private workflowManager: WorkflowManager;
 
     private constructor() {
         this.statusManager = StatusManager.getInstance();
         this.promptService = PromptService.getInstance();
+        this.workflowManager = WorkflowManager.getInstance();
     }
 
     /**
@@ -74,13 +77,8 @@ export class AgentMonitor {
      * Check if the agent is alive and prompt if idle
      */
     private async checkAgentAlive(): Promise<void> {
-        const currentState = this.statusManager.getState();
-
-        // Skip check for these states
-        if (currentState === WorkflowState.Idle ||
-            currentState === WorkflowState.Paused ||
-            currentState === WorkflowState.Error ||
-            currentState === WorkflowState.Completed) {
+        // Skip check if no active workflow
+        if (!this.workflowManager.isActiveWorkflow()) {
             return;
         }
 
@@ -102,31 +100,16 @@ export class AgentMonitor {
             return false;
         }
 
-        // Check based on time since last status update
-        const lastActivityTime = this.statusManager.getLastUpdateTime();
-        if (!lastActivityTime) {
-            return false;
-        }
-
-        const config = vscode.workspace.getConfiguration('marco');
-        const idleTimeoutMs = config.get<number>('idleTimeoutSeconds', 30) * 1000;
-
-        const timeSinceLastActivity = Date.now() - lastActivityTime.getTime();
-        return timeSinceLastActivity > idleTimeoutMs;
+        // Use workflow manager to check idle status based on time
+        return this.workflowManager.isAgentIdle();
     }
 
     /**
      * Ensure the Copilot Chat panel is open
      */
     private async ensureChatIsOpen(): Promise<void> {
-        const currentState = this.statusManager.getState();
-
-        // Only ensure chat is open if we're in an active workflow state
-        if (currentState !== WorkflowState.Idle &&
-            currentState !== WorkflowState.Paused &&
-            currentState !== WorkflowState.Error &&
-            currentState !== WorkflowState.Completed) {
-
+        // Only ensure chat is open if we're in an active workflow
+        if (this.workflowManager.isActiveWorkflow()) {
             await ensureChatOpen(3, 1000, false);
         }
     }
