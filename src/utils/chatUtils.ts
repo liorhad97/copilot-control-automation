@@ -34,48 +34,24 @@ export async function ensureChatOpen(retries = 5, delayMs = 1000, focusChat = fa
         console.log(`Chat open attempt ${attempt}/${retries}`);
 
         try {
-            // Try standard command
+            // Try standard command - this seems more reliable
             await vscode.commands.executeCommand('workbench.action.chat.open', { query: '' });
-            console.log('Successfully opened chat');
+            console.log('Successfully opened chat using workbench.action.chat.open');
 
             if (focusChat) {
-                await focusChatTab();
+                await focusChatTab(); // Still attempt to focus
             }
 
             return true;
         } catch (error) {
             console.log(`Attempt ${attempt} failed with standard command:`, error);
 
-            // Wait before trying next approach
+            // Wait before trying next approach (if any were added back)
             await new Promise(resolve => setTimeout(resolve, delayMs));
 
-            try {
-                // Try backup command
-                await vscode.commands.executeCommand('workbench.view.extension.github-copilot-chat');
-                console.log('Successfully opened chat via view extension command');
+            // Removed the attempt using 'workbench.view.extension.github-copilot-chat' as it was failing
+            // Removed the attempt using 'vscode.editorChat.start' as it opens editor chat, not the view
 
-                if (focusChat) {
-                    await focusChatTab();
-                }
-
-                return true;
-            } catch (error) {
-                console.log(`View extension attempt ${attempt} failed:`, error);
-
-                // Try yet another approach
-                try {
-                    await vscode.commands.executeCommand('vscode.editorChat.start');
-                    console.log('Successfully started editor chat');
-
-                    if (focusChat) {
-                        await focusChatTab();
-                    }
-
-                    return true;
-                } catch (error) {
-                    console.log(`Editor chat start attempt ${attempt} failed:`, error);
-                }
-            }
         }
 
         // Wait before next retry cycle
@@ -93,8 +69,10 @@ export async function ensureChatOpen(retries = 5, delayMs = 1000, focusChat = fa
 async function focusChatTab(): Promise<boolean> {
     try {
         // Use the command designed to show/focus the chat view
-        await vscode.commands.executeCommand('workbench.view.extension.github-copilot-chat');
-        console.log('Successfully focused Copilot Chat view.');
+        // Try the standard open command again, hoping it brings focus
+        await vscode.commands.executeCommand('workbench.action.chat.open');
+        console.log('Attempted to focus Copilot Chat view via workbench.action.chat.open');
+        // It's hard to guarantee focus was set, but we tried.
         return true;
     } catch (error) {
         console.error('Error focusing chat tab via command:', error);
@@ -135,64 +113,56 @@ export async function sendChatMessage(message: string, backgroundMode = false): 
 
         let sentSuccessfully = false;
 
+        // Removed the attempt using 'github.copilot-chat.sendMessage' as it was failing
+
         try {
-            // Method 1: Try to send message using the chat.sendMessage command
-            console.log('Attempting to send message using github.copilot-chat.sendMessage');
-            await vscode.commands.executeCommand('github.copilot-chat.sendMessage', { message });
-            console.log('Message sent using github.copilot-chat.sendMessage');
-            sentSuccessfully = true;
-        } catch (error) {
-            console.log('Failed to send message via sendMessage command, trying fallback method:', error);
-
-            try {
-                // Method 2: Focus the chat and insert the message, then use command to send
+            // Method 2: Focus the chat and insert the message, then use command to send
+            // Ensure focus is attempted
+            if (!backgroundMode) {
                 await focusChatTab();
-                console.log('Chat tab focused, inserting message');
-                await new Promise(resolve => setTimeout(resolve, 500));
+                console.log('Chat tab focus attempted, inserting message');
+                await new Promise(resolve => setTimeout(resolve, 500)); // Give time for focus
+            } else {
+                // If in background mode, we might not need explicit focus before pasting
+                console.log('Background mode: Inserting message without explicit focus attempt.');
+            }
 
-                // Use the clipboard as intermediary to paste message
-                const originalClipboard = await vscode.env.clipboard.readText();
-                await vscode.env.clipboard.writeText(message);
+            // Use the clipboard as intermediary to paste message
+            const originalClipboard = await vscode.env.clipboard.readText();
+            await vscode.env.clipboard.writeText(message);
 
-                // Try to clear any existing text first
-                await vscode.commands.executeCommand('editor.action.selectAll');
-                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-                await vscode.env.clipboard.writeText(originalClipboard); // Restore clipboard
+            // Try to clear any existing text first
+            await vscode.commands.executeCommand('editor.action.selectAll');
+            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            await vscode.env.clipboard.writeText(originalClipboard); // Restore clipboard
 
-                // Send message - try multiple methods
-                await new Promise(resolve => setTimeout(resolve, 500));
-                console.log('Attempting to send message with command');
+            // Send message - try multiple methods
+            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log('Skipping workbench.action.chat.send, trying keyboard shortcut.');
+            try {
+                // Method 4: Try keyboard shortcut - Enter key
+                await vscode.commands.executeCommand('type', { text: '\n' });
+                console.log('Message sent using Enter key');
+                sentSuccessfully = true;
+            } catch (typeError) {
+                console.log('Failed to send using Enter key:', typeError);
 
                 try {
-                    // Method 3: Try specific chat send command
-                    await vscode.commands.executeCommand('workbench.action.chat.send');
-                    console.log('Message sent using workbench.action.chat.send');
+                    // Method 5: Last resort - Shift+Enter keyboard sequence
+                    await vscode.commands.executeCommand('cursorEnd');
+                    await vscode.commands.executeCommand('editor.action.insertLineAfter');
+                    console.log('Attempted to send using Shift+Enter sequence');
                     sentSuccessfully = true;
-                } catch (sendError) {
-                    console.log('Failed to send using command, trying keyboard shortcut:', sendError);
-
-                    try {
-                        // Method 4: Try keyboard shortcut - Enter key
-                        await vscode.commands.executeCommand('type', { text: '\n' });
-                        console.log('Message sent using Enter key');
-                        sentSuccessfully = true;
-                    } catch (typeError) {
-                        console.log('Failed to send using Enter key:', typeError);
-
-                        try {
-                            // Method 5: Last resort - Shift+Enter keyboard sequence
-                            await vscode.commands.executeCommand('cursorEnd');
-                            await vscode.commands.executeCommand('editor.action.insertLineAfter');
-                            console.log('Attempted to send using Shift+Enter sequence');
-                            sentSuccessfully = true;
-                        } catch (finalError) {
-                            console.error('All send methods failed:', finalError);
-                        }
-                    }
+                } catch (finalError) {
+                    console.error('All send methods failed:', finalError);
+                    // Ensure sentSuccessfully remains false if all methods fail
+                    sentSuccessfully = false;
                 }
-            } catch (fallbackError) {
-                console.error('Fallback clipboard method failed:', fallbackError);
             }
+        } catch (fallbackError) {
+            console.error('Fallback clipboard method failed:', fallbackError);
+            // Ensure sentSuccessfully is false if the clipboard method fails
+            sentSuccessfully = false;
         }
 
         // If in background mode, try to restore original focus
@@ -256,7 +226,8 @@ async function restoreFocus(tabToRestore: vscode.Tab): Promise<boolean> {
             return true;
         }
 
-        return false; // Should not happen if viewColumn is valid
+        // This case should ideally not be reached if viewColumn is valid
+        return false;
 
     } catch (error) {
         console.error('Error restoring focus:', error);
