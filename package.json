@@ -1,0 +1,142 @@
+{
+  "name": "marco-ai",
+  "displayName": "Marco AI",
+  "description": "Automate your AI workflows in VS Code",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "marco-ai-sidebar",
+          "title": "Marco AI",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "marco-ai-sidebar": [
+        {
+          "type": "webview",
+          "id": "marco-ai.sidebar",
+          "name": "Marco AI Dashboard",
+          "icon": "$(dashboard)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "marco.toggleWorkflow",
+        "title": "Marco AI: Toggle Workflow Play/Stop"
+      },
+      {
+        "command": "marco.pauseWorkflow",
+        "title": "Marco AI: Pause/Resume Workflow"
+      },
+      {
+        "command": "marco.restart",
+        "title": "Marco AI: Restart Workflow"
+      },
+      {
+        "command": "marco.openChat",
+        "title": "Marco AI: Open Copilot Chat"
+      },
+      {
+        "command": "marco.openSidebar",
+        "title": "Marco AI: Open Dashboard"
+      },
+      {
+        "command": "marco.checkAgentAlive",
+        "title": "Marco AI: Check if Agent is Active"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Marco AI Settings",
+      "properties": {
+        "marco.initCreateBranch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable branch creation in initial setup"
+        },
+        "marco.needToWriteTest": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include test-writing steps"
+        },
+        "marco.backgroundMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run Marco workflow in background mode, minimizing focus changes to the Copilot chat"
+        },
+        "marco.agentMode": {
+          "type": "string",
+          "enum": [
+            "Agent",
+            "Edit",
+            "Ask"
+          ],
+          "default": "Agent",
+          "description": "Set the operating mode for the Copilot agent"
+        },
+        "marco.preferredModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Claude 3.7 Sonnet",
+            "Gemini 2.5",
+            "GPT 4.1"
+          ],
+          "description": "Preferred AI models in order of priority"
+        },
+        "marco.checkAgentFrequency": {
+          "type": "number",
+          "default": 10000,
+          "description": "How often to check if the agent is idle (in milliseconds)"
+        },
+        "marco.ensureChatFrequency": {
+          "type": "number",
+          "default": 300000,
+          "description": "How often to ensure the chat is open (in milliseconds)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.99.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.28.0",
+    "@typescript-eslint/parser": "^8.28.0",
+    "eslint": "^9.23.0",
+    "typescript": "^5.8.2",
+    "ts-loader": "^9.5.2",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/codicons": "^0.0.35"
+  }
+}
