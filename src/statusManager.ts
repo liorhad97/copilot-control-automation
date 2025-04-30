@@ -18,17 +18,27 @@ export enum WorkflowState {
     Error = 'error'
 }
 
+type StateChangeListener = (state: WorkflowState, message?: string) => void;
+
 /**
  * Manages the status bar display and workflow state
  */
 export class StatusManager {
     private static instance: StatusManager;
+    private currentState: WorkflowState = WorkflowState.Idle;
+    private lastActivityTime: Date | null = null;
+    private stateChangeListeners: StateChangeListener[] = [];
+    
+    // Status bar items
     private playPauseButton: vscode.StatusBarItem | undefined;
     private stopButton: vscode.StatusBarItem | undefined;
     private restartButton: vscode.StatusBarItem | undefined;
     private stateLabel: vscode.StatusBarItem | undefined;
-    private currentState: WorkflowState = WorkflowState.Idle;
-    private lastActivityTime: Date | null = null;
+    
+    // Animation properties
+    private animationFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    private animationIndex = 0;
+    private animationInterval: NodeJS.Timeout | undefined;
 
     // Private constructor for singleton pattern
     private constructor() {}
@@ -80,11 +90,67 @@ export class StatusManager {
         this.currentState = state;
         this.lastActivityTime = new Date();
         this.updateStatusBar(message);
+
+        // Start or stop animation based on state
+        if (state === WorkflowState.Idle || state === WorkflowState.Paused ||
+            state === WorkflowState.Completed || state === WorkflowState.Error) {
+            this.stopAnimation();
+        } else {
+            this.startAnimation();
+        }
+
+        // Show notification for state changes
+        if (message) {
+            this.showStateNotification(state, message);
+        }
+
+        // Notify listeners of the state change
+        this.notifyStateChangeListeners(state, message);
     }
 
     /**
-     * Update status bar items based on current state
-     * @param message Optional status message
+     * Get the current workflow state
+     */
+    public getCurrentState(): WorkflowState {
+        return this.currentState;
+    }
+    
+    /**
+     * Get the time of the last activity
+     */
+    public getLastActivityTime(): Date | null {
+        return this.lastActivityTime;
+    }
+
+    /**
+     * Register a listener for state changes
+     * @param listener The callback function to be called when the state changes
+     */
+    public onStateChanged(listener: StateChangeListener): vscode.Disposable {
+        this.stateChangeListeners.push(listener);
+
+        // Return a disposable to remove the listener
+        return {
+            dispose: () => {
+                const index = this.stateChangeListeners.indexOf(listener);
+                if (index !== -1) {
+                    this.stateChangeListeners.splice(index, 1);
+                }
+            }
+        };
+    }
+
+    /**
+     * Notify all listeners of a state change
+     */
+    private notifyStateChangeListeners(state: WorkflowState, message?: string): void {
+        for (const listener of this.stateChangeListeners) {
+            listener(state, message);
+        }
+    }
+
+    /**
+     * Update the status bar display
      */
     private updateStatusBar(message?: string): void {
         if (!this.playPauseButton || !this.stopButton || !this.restartButton || !this.stateLabel) {
@@ -165,18 +231,76 @@ export class StatusManager {
                         break;
                 }
 
-                this.stateLabel.text = `${icon} Marco AI: ${message || this.currentState}`;
+                // Get elapsed time
+                const elapsedTime = this.getElapsedTime();
+                this.stateLabel.text = `${icon} Marco AI: ${message || this.formatStateName(this.currentState)} ${elapsedTime}`;
 
                 this.showPlayPauseButton(true);
                 this.showStopButton(true);
                 this.showRestartButton(true);
                 break;
         }
+        
+        // Set status bar colors
+        this.setStatusBarColor();
+    }
+
+    /**
+     * Format the state enum name for display
+     */
+    private formatStateName(state: WorkflowState): string {
+        return state.replace(/-/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
+    /**
+     * Set status bar color based on state
+     */
+    private setStatusBarColor(): void {
+        if (!this.stateLabel) {
+            return;
+        }
+        
+        switch (this.currentState) {
+            case WorkflowState.Error:
+                this.stateLabel.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+                break;
+            case WorkflowState.Completed:
+                this.stateLabel.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+                break;
+            case WorkflowState.Paused:
+                this.stateLabel.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+                break;
+            default:
+                this.stateLabel.backgroundColor = undefined;
+                break;
+        }
+    }
+
+    /**
+     * Calculate elapsed time since last state change
+     */
+    private getElapsedTime(): string {
+        if (!this.lastActivityTime) {
+            return '';
+        }
+        
+        const now = new Date();
+        const elapsed = Math.floor((now.getTime() - this.lastActivityTime.getTime()) / 1000);
+
+        if (elapsed < 60) {
+            return `(${elapsed}s)`;
+        } else {
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            return `(${minutes}m ${seconds}s)`;
+        }
     }
 
     /**
      * Show or hide the play/pause button
-     * @param show Whether to show the button
      */
     private showPlayPauseButton(show: boolean): void {
         if (this.playPauseButton) {
@@ -190,7 +314,6 @@ export class StatusManager {
 
     /**
      * Show or hide the stop button
-     * @param show Whether to show the button
      */
     private showStopButton(show: boolean): void {
         if (this.stopButton) {
@@ -204,7 +327,6 @@ export class StatusManager {
 
     /**
      * Show or hide the restart button
-     * @param show Whether to show the button
      */
     private showRestartButton(show: boolean): void {
         if (this.restartButton) {
@@ -217,18 +339,69 @@ export class StatusManager {
     }
 
     /**
-     * Get the current workflow state
-     * @returns The current workflow state
+     * Start animation for active states
      */
-    public getCurrentState(): WorkflowState {
-        return this.currentState;
+    private startAnimation(): void {
+        if (this.animationInterval) {
+            clearInterval(this.animationInterval);
+        }
+
+        this.animationInterval = setInterval(() => {
+            this.animationIndex = (this.animationIndex + 1) % this.animationFrames.length;
+            this.updateStatusBar();
+        }, 100);
     }
 
     /**
-     * Get the time of the last activity
-     * @returns The last activity time or null if no activity has occurred
+     * Stop animation
      */
-    public getLastActivityTime(): Date | null {
-        return this.lastActivityTime;
+    private stopAnimation(): void {
+        if (this.animationInterval) {
+            clearInterval(this.animationInterval);
+            this.animationInterval = undefined;
+        }
+    }
+
+    /**
+     * Show a notification for state changes
+     */
+    private showStateNotification(state: WorkflowState, message: string): void {
+        switch (state) {
+            case WorkflowState.Error:
+                vscode.window.showErrorMessage(`Marco AI: ${message}`);
+                break;
+            case WorkflowState.Completed:
+                vscode.window.showInformationMessage(`Marco AI: ${message}`);
+                break;
+            case WorkflowState.Paused:
+                vscode.window.showWarningMessage(`Marco AI: ${message}`);
+                break;
+            default:
+                // Don't show notifications for normal state transitions
+                break;
+        }
+    }
+
+    /**
+     * Dispose all status bar items
+     */
+    public dispose(): void {
+        this.stopAnimation();
+        
+        if (this.playPauseButton) {
+            this.playPauseButton.dispose();
+        }
+        
+        if (this.stopButton) {
+            this.stopButton.dispose();
+        }
+        
+        if (this.restartButton) {
+            this.restartButton.dispose();
+        }
+        
+        if (this.stateLabel) {
+            this.stateLabel.dispose();
+        }
     }
 }
