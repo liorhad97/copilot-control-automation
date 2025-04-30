@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from '../statusManager';
-import { ensureChatOpen, selectAIModel, sendChatMessage } from '../utils';
+// Updated import paths for utils
+import { ensureChatOpen, selectAIModel, sendChatMessage } from '../utils/chatUtils';
 import { sleep } from '../utils/helpers';
 
 // Track the workflow state
@@ -149,13 +150,13 @@ export async function continueDevelopment(context: vscode.ExtensionContext): Pro
         statusManager.setState(WorkflowState.SendingTask, `Starting iteration #${iterationCount}`);
 
         // Load the continue iteration prompt
-        const continuePrompt = await loadPromptFile('continue_iteration.md');
+        const continuePrompt = await loadPromptFile('continue_iteration');
 
         // Send the continue prompt
         await sendChatMessage(`@agent Continue: "${continuePrompt}"`, backgroundMode);
 
-        // Allow time for agent to respond
-        await sleep(2000);
+        // Allow time for agent to respond (Increased delay)
+        await sleep(4000); // Increased from 2000
         await checkContinue();
 
         // Resume normal development workflow
@@ -248,21 +249,29 @@ async function checkContinue(): Promise<void> {
 
 /**
  * Loads a prompt file from the prompts directory
- * @param fileName The name of the prompt file
+ * @param fileName The name of the prompt file (without extension)
  * @returns The content of the prompt file
  */
 async function loadPromptFile(fileName: string): Promise<string> {
     try {
-        const extensionPath = vscode.extensions.getExtension('marco-ai.marco-ai')?.extensionPath;
-        if (!extensionPath) {
-            throw new Error('Could not find extension path');
-        }
+        // Use __dirname which is reliable in extensions
+        const extensionPath = path.resolve(__dirname, '../..'); // Go up two levels from src/workflows
 
-        const promptPath = path.join(extensionPath, 'src', 'prompts', fileName);
+        // Construct the path using .txt extension
+        const promptPath = path.join(extensionPath, 'src', 'prompts', `${fileName}.txt`);
         return fs.readFileSync(promptPath, 'utf8');
     } catch (error) {
-        console.error(`Error loading prompt file ${fileName}:`, error);
-        return `Could not load prompt ${fileName}. Please continue with the development iteration.`;
+        console.error(`Error loading prompt file ${fileName}.txt:`, error);
+        // Try with .md as a fallback, just in case
+        try {
+            const extensionPath = path.resolve(__dirname, '../..');
+            const mdPromptPath = path.join(extensionPath, 'src', 'prompts', `${fileName}.md`);
+            console.warn(`Falling back to loading ${fileName}.md`);
+            return fs.readFileSync(mdPromptPath, 'utf8');
+        } catch (mdError) {
+            console.error(`Also failed to load fallback ${fileName}.md:`, mdError);
+            return `Could not load prompt ${fileName}.txt or ${fileName}.md. Please continue with the development iteration.`;
+        }
     }
 }
 
@@ -361,26 +370,26 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
         // 1) Send development task/checklist
         statusManager.setState(WorkflowState.SendingTask, `Sending development checklist${iterationMessage}`);
 
-        // Load init prompt
-        const initPrompt = await loadPromptFile('init.md');
+        // Load init prompt (pass filename without extension)
+        const initPrompt = await loadPromptFile('init');
         await sendChatMessage(`@agent ${initPrompt}`, backgroundMode);
 
         // Send checklist after init prompt
         await sendChecklistToChat();
 
-        // Allow time for agent to process
-        await sleep(2000);
+        // Allow time for agent to process (Increased delay)
+        await sleep(4000); // Increased from 2000
         await checkContinue();
 
         // 2) Check agent status after some time
         statusManager.setState(WorkflowState.CheckingStatus, `Checking agent progress${iterationMessage}`);
 
-        // Load check_agent prompt
-        const checkAgentPrompt = await loadPromptFile('check_agent.md');
+        // Load check_agent prompt (pass filename without extension)
+        const checkAgentPrompt = await loadPromptFile('check_agent');
         await sendChatMessage(`@agent ${checkAgentPrompt}`, backgroundMode);
 
-        // Allow time for agent to respond
-        await sleep(3000);
+        // Allow time for agent to respond (Increased delay)
+        await sleep(6000); // Increased from 3000
         await checkContinue();
 
         // 3) Request tests if configured
@@ -388,34 +397,34 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
         if (needToWriteTest) {
             statusManager.setState(WorkflowState.RequestingTests, `Requesting test implementation${iterationMessage}`);
 
-            // Load write_tests prompt
-            const writeTestsPrompt = await loadPromptFile('write_tests.md');
+            // Load write_tests prompt (pass filename without extension)
+            const writeTestsPrompt = await loadPromptFile('write_tests');
             await sendChatMessage(`@agent ${writeTestsPrompt}`, backgroundMode);
 
-            // Allow time for agent to process
-            await sleep(3000);
+            // Allow time for agent to process (Increased delay)
+            await sleep(6000); // Increased from 3000
             await checkContinue();
 
             // Check status again
             statusManager.setState(WorkflowState.CheckingStatus, `Checking agent progress on tests${iterationMessage}`);
-            // Load test progress prompt instead of hardcoding
-            const testProgressPrompt = await loadPromptFile('test_progress.md');
+            // Load test progress prompt (pass filename without extension)
+            const testProgressPrompt = await loadPromptFile('test_progress');
             await sendChatMessage(`@agent ${testProgressPrompt}`, backgroundMode);
 
-            // Allow time for agent to respond
-            await sleep(3000);
+            // Allow time for agent to respond (Increased delay)
+            await sleep(6000); // Increased from 3000
             await checkContinue();
         }
 
         // 4) Verify completion of checklist
         statusManager.setState(WorkflowState.VerifyingChecklist, `Verifying checklist completion${iterationMessage}`);
 
-        // Load check_checklist prompt
-        const checkChecklistPrompt = await loadPromptFile('check_checklist.md');
+        // Load check_checklist prompt (pass filename without extension)
+        const checkChecklistPrompt = await loadPromptFile('check_checklist');
         await sendChatMessage(`@agent ${checkChecklistPrompt}`, backgroundMode);
 
-        // Allow time for agent to respond
-        await sleep(3000);
+        // Allow time for agent to respond (Increased delay)
+        await sleep(6000); // Increased from 3000
 
         // 5) Loop back or continue based on checklist status
         const continueToNextIteration = await shouldContinueToNextIteration();
@@ -423,12 +432,12 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
             iterationCount++;
             statusManager.setState(WorkflowState.ContinuingIteration, `Starting iteration ${iterationCount}`);
 
-            // Load continue_iteration prompt
-            const continueIterationPrompt = await loadPromptFile('continue_iteration.md');
+            // Load continue_iteration prompt (pass filename without extension)
+            const continueIterationPrompt = await loadPromptFile('continue_iteration');
             await sendChatMessage(`@agent ${continueIterationPrompt}`, backgroundMode);
 
-            // Allow time for agent to process
-            await sleep(3000);
+            // Allow time for agent to process (Increased delay)
+            await sleep(6000); // Increased from 3000
 
             // Loop back to start of development workflow
             await developmentWorkflow(context);
@@ -449,8 +458,8 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
  * Sends the development checklist to the chat
  */
 async function sendChecklistToChat(): Promise<void> {
-    // Load checklist from prompt file
-    const checklist = await loadPromptFile('checklist.md');
+    // Load checklist from prompt file (pass filename without extension)
+    const checklist = await loadPromptFile('checklist');
     await sendChatMessage(checklist, backgroundMode);
 }
 
@@ -458,8 +467,8 @@ async function sendChecklistToChat(): Promise<void> {
  * Sends test writing instructions to the chat
  */
 async function sendTestInstructionsToChat(): Promise<void> {
-    // Load test instructions from prompt file
-    const testInstructions = await loadPromptFile('test_instructions.md');
+    // Load test instructions from prompt file (pass filename without extension)
+    const testInstructions = await loadPromptFile('test_instructions');
     await sendChatMessage(testInstructions, backgroundMode);
 }
 
@@ -467,8 +476,8 @@ async function sendTestInstructionsToChat(): Promise<void> {
  * Sends verification instructions to the chat
  */
 async function sendVerificationToChat(): Promise<void> {
-    // Load verification instructions from prompt file
-    const verification = await loadPromptFile('verify_completion.md');
+    // Load verification instructions from prompt file (pass filename without extension)
+    const verification = await loadPromptFile('verify_completion');
     await sendChatMessage(verification, backgroundMode);
 }
 

@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
+import { registerCommands } from './commands'; // Import from new file
+import { clearMonitoringTimers, setupMonitoringTimers } from './monitoring'; // Import from new file
 import { StatusManager } from './statusManager';
 import { SidebarProvider } from './ui/sidebarProvider';
-import { ensureChatOpen, sendChatMessage } from './utils';
-import { isAgentIdle, isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow } from './workflows/workflowManager';
+// Removed unused imports: ensureChatOpen, sendChatMessage, isAgentIdle, isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Marco AI extension is now active');
@@ -20,154 +21,18 @@ export function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	// Register commands
+	// Register commands from the dedicated file
 	registerCommands(context);
 
-	// Set up timers for monitoring
+	// Set up timers for monitoring from the dedicated file
 	setupMonitoringTimers(context);
 
 	vscode.window.showInformationMessage('Marco AI is ready to help!');
 }
 
-function registerCommands(context: vscode.ExtensionContext) {
-	// Command to toggle workflow (play/stop)
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.toggleWorkflow', async () => {
-			if (isWorkflowRunning()) {
-				await stopWorkflow();
-			} else {
-				// Read configuration settings for workflow
-				const config = vscode.workspace.getConfiguration('marco');
-				const backgroundMode = config.get<boolean>('backgroundMode') || false;
-
-				// Set background mode before starting workflow
-				setBackgroundMode(backgroundMode);
-
-				await runWorkflow(context, 'play');
-			}
-		})
-	);
-
-	// Command to pause/resume workflow
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.pauseWorkflow', () => {
-			if (isWorkflowRunning()) {
-				if (isWorkflowPaused()) {
-					resumeWorkflow(context);
-				} else {
-					pauseWorkflow();
-				}
-			}
-		})
-	);
-
-	// Command to restart workflow
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.restart', async () => {
-			await runWorkflow(context, 'restart');
-		})
-	);
-
-	// Command to open Copilot Chat
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.openChat', async () => {
-			await ensureChatOpen(5, 1000, true);
-		})
-	);
-
-	// Command to open the sidebar
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.openSidebar', () => {
-			vscode.commands.executeCommand('marco-ai.sidebar.focus');
-		})
-	);
-
-	// Command to check if agent is alive/active
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.checkAgentAlive', async () => {
-			if (isWorkflowRunning() && !isWorkflowPaused()) {
-				const idle = await isAgentIdle();
-				if (idle) {
-					// Get background mode configuration
-					const config = vscode.workspace.getConfiguration('marco');
-					const backgroundMode = config.get<boolean>('backgroundMode') || false;
-
-					// Send prompt to idle agent, using background mode setting
-					await sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
-				}
-			}
-		})
-	);
-
-	// Command to toggle background mode
-	context.subscriptions.push(
-		vscode.commands.registerCommand('marco.toggleBackgroundMode', async () => {
-			// Get current background mode setting
-			const config = vscode.workspace.getConfiguration('marco');
-			const currentBackgroundMode = config.get<boolean>('backgroundMode') || false;
-
-			// Toggle and update setting
-			await config.update('backgroundMode', !currentBackgroundMode, vscode.ConfigurationTarget.Global);
-
-			// Apply to current workflow if running
-			if (isWorkflowRunning()) {
-				setBackgroundMode(!currentBackgroundMode);
-				vscode.window.showInformationMessage(`Background mode ${!currentBackgroundMode ? 'enabled' : 'disabled'}`);
-			}
-		})
-	);
-}
-
-function setupMonitoringTimers(context: vscode.ExtensionContext) {
-	// Get frequency from configuration
-	const config = vscode.workspace.getConfiguration('marco');
-	const checkAgentFrequency = config.get<number>('checkAgentFrequency') || 10000;
-	const ensureChatFrequency = config.get<number>('ensureChatFrequency') || 300000;
-
-	// Every 10s (or configured time): Check agent alive when workflow is running
-	const checkAgentTimer = setInterval(() => {
-		if (isWorkflowRunning() && !isWorkflowPaused()) {
-			vscode.commands.executeCommand('marco.checkAgentAlive');
-		}
-	}, checkAgentFrequency);
-
-	// Every 5min (or configured time): Ensure chat open when workflow is running
-	const ensureChatTimer = setInterval(async () => {
-		if (isWorkflowRunning() && !isWorkflowPaused()) {
-			const config = vscode.workspace.getConfiguration('marco');
-			const backgroundMode = config.get<boolean>('backgroundMode') || false;
-
-			// Don't focus if in background mode
-			await ensureChatOpen(5, 1000, !backgroundMode);
-		}
-	}, ensureChatFrequency);
-
-	// Clean up timers on deactivation
-	context.subscriptions.push({
-		dispose: () => {
-			clearInterval(checkAgentTimer);
-			clearInterval(ensureChatTimer);
-		}
-	});
-
-	// Watch for configuration changes
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeConfiguration(e => {
-			if (e.affectsConfiguration('marco.checkAgentFrequency') ||
-				e.affectsConfiguration('marco.ensureChatFrequency')) {
-
-				// Clear existing timers
-				clearInterval(checkAgentTimer);
-				clearInterval(ensureChatTimer);
-
-				// Set up new timers with updated frequencies
-				setupMonitoringTimers(context);
-			}
-		})
-	);
-}
-
 export function deactivate() {
 	console.log('Marco AI extension is now deactivated');
-	// Any cleanup logic goes here
+	// Clear timers on deactivation
+	clearMonitoringTimers();
+	// Any other cleanup logic goes here
 }

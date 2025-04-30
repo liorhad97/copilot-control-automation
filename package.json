@@ -17,14 +17,14 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "marco-ai-sidebar",
+          "id": "marco-ai-activitybar",
           "title": "Marco AI",
           "icon": "$(rocket)"
         }
       ]
     },
     "views": {
-      "marco-ai-sidebar": [
+      "marco-ai-activitybar": [
         {
           "type": "webview",
           "id": "marco-ai.sidebar",
@@ -57,6 +57,10 @@
       {
         "command": "marco.checkAgentAlive",
         "title": "Marco AI: Check if Agent is Active"
+      },
+      {
+        "command": "marco.showWelcome",
+        "title": "Marco AI: Show Welcome Page"
       }
     ],
     "configuration": {

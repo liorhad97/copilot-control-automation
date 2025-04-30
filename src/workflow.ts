@@ -1,6 +1,9 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from './statusManager';
-import { ensureChatOpen, sendChatMessage } from './utils';
+import { getWorkspaceRoot } from './utils';
+import { ensureChatOpen, sendChatMessage } from './utils/chatUtils';
 
 export async function runWorkflow(ctx: vscode.ExtensionContext, action: string) {
     const statusManager = StatusManager.getInstance();
@@ -32,14 +35,9 @@ async function restartWorkflow(ctx: vscode.ExtensionContext) {
 
     vscode.window.showInformationMessage('Restarting Marco AI workflow...');
 
-    // Try to ensure chat is open
     try {
         await ensureChatOpen();
-
-        // Send restart message to chat using the new function
         await sendChatMessage('Marco AI workflow has been restarted. Starting fresh...');
-
-        // Re-run the initial setup
         await initialSetup(ctx);
         await developmentWorkflow(ctx);
     } catch (error) {
@@ -55,14 +53,10 @@ async function initialSetup(ctx: vscode.ExtensionContext) {
     vscode.window.showInformationMessage('Initializing Marco AI workflow');
 
     try {
-        // Open chat using our enhanced method
         await ensureChatOpen();
-
-        // 1) Send initial instructions using the new function
         statusManager.setState(WorkflowState.SendingTask, "Sending initial instructions");
         await sendChatMessage('Starting Marco AI automation process. I will help automate your workflow.');
 
-        // 2) Branch creation if configured
         const config = vscode.workspace.getConfiguration('marco');
         if (config.get<boolean>('initCreateBranch')) {
             statusManager.setState(WorkflowState.CreatingBranch, "Creating new branch");
@@ -80,70 +74,58 @@ async function developmentWorkflow(ctx: vscode.ExtensionContext) {
     const config = vscode.workspace.getConfiguration('marco');
 
     try {
-        // Read checklist
         statusManager.setState(WorkflowState.SendingTask, "Sending development checklist");
         await sendChatMessage('Here is the development checklist for this feature:');
-        await sendChecklistToChat();
+        await sendPromptFileToChat('checklist.md');
 
-        // Write tests if configured
         if (config.get<boolean>('needToWriteTest')) {
             statusManager.setState(WorkflowState.RequestingTests, "Requesting test implementation");
             await sendChatMessage('Please write tests for this feature.');
-            await sendTestInstructionsToChat();
-            await sendChecklistToChat();
+            await sendPromptFileToChat('test_instructions.md');
+            await sendPromptFileToChat('verify_completion.md');
         }
 
-        // Verify completion
         statusManager.setState(WorkflowState.VerifyingCompletion, "Verifying task completion");
         await sendChatMessage('Please verify all items in the checklist are complete:');
-        await sendVerificationToChat();
+        await sendPromptFileToChat('verify_completion.md');
 
-        // Mark workflow as completed
         statusManager.setState(WorkflowState.Completed, "Workflow completed successfully");
     } catch (error) {
         statusManager.setState(WorkflowState.Error, "Development workflow failed");
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Development workflow failed: ${errorMessage}`);
+    }
+}
+
+// Helper function to read prompt files
+async function readPromptFile(fileName: string): Promise<string> {
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+        throw new Error("Workspace root not found.");
+    }
+    const filePath = path.join(workspaceRoot, 'src', 'prompts', fileName);
+    try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        return content;
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to read prompt file: ${fileName}`);
+        console.error(`Error reading prompt file ${filePath}:`, error);
         throw error;
     }
 }
 
-async function sendChecklistToChat() {
-    const checklist = [
-        "- [ ] Feature requirements understood",
-        "- [ ] Code structure planned",
-        "- [ ] Implementation complete",
-        "- [ ] Documentation added",
-        "- [ ] Code refactored and optimized"
-    ].join('\n');
-
-    await sendChatMessage(checklist);
-}
-
-async function sendTestInstructionsToChat() {
-    const testInstructions = [
-        "Please write tests for the following:",
-        "1. Unit tests for core functionality",
-        "2. Integration tests if applicable",
-        "3. Edge case handling"
-    ].join('\n');
-
-    await sendChatMessage(testInstructions);
-}
-
-async function sendVerificationToChat() {
-    const verification = [
-        "Please verify:",
-        "1. All checklist items are complete",
-        "2. Tests are passing (if applicable)",
-        "3. No regression issues",
-        "4. Ready for review"
-    ].join('\n');
-
-    await sendChatMessage(verification);
+// Helper function to send prompt file content to chat
+async function sendPromptFileToChat(fileName: string) {
+    try {
+        const content = await readPromptFile(fileName);
+        await sendChatMessage(content);
+    } catch (error) {
+        console.error(`Failed to send prompt file ${fileName} to chat.`);
+    }
 }
 
 async function createAndCheckoutBranch() {
     try {
-        // Try to get the Git extension
         const gitExtension = vscode.extensions.getExtension<any>('vscode.git');
 
         if (gitExtension) {
@@ -151,10 +133,8 @@ async function createAndCheckoutBranch() {
 
             if (git.repositories.length > 0) {
                 const repo = git.repositories[0];
-                // Generate branch name with timestamp
                 const branchName = `feature/marco-${Date.now()}`;
 
-                // Create and checkout the branch
                 await repo.createBranch(branchName, true);
                 vscode.window.showInformationMessage(`Created and checked out branch: ${branchName}`);
                 return true;
@@ -177,9 +157,8 @@ async function createAndCheckoutBranch() {
  */
 export function isAgentIdle(): boolean {
     const statusManager = StatusManager.getInstance();
-    const currentState = statusManager.getCurrentState();
+    const currentState = statusManager.getState();
 
-    // If we're already in a terminal state, the agent isn't considered idle
     if (currentState === WorkflowState.Idle ||
         currentState === WorkflowState.Paused ||
         currentState === WorkflowState.Error ||
@@ -187,16 +166,14 @@ export function isAgentIdle(): boolean {
         return false;
     }
 
-    // Check the time since the last activity
-    const lastActivityTime = statusManager.getLastActivityTime();
+    const lastActivityTime = statusManager.getLastUpdateTime();
     if (!lastActivityTime) {
-        return false; // No activity recorded yet
+        return false;
     }
 
     const config = vscode.workspace.getConfiguration('marco');
     const idleTimeoutMs = config.get<number>('idleTimeoutSeconds', 30) * 1000;
 
-    // Consider agent idle if no activity for the configured timeout period
     const timeSinceLastActivity = Date.now() - lastActivityTime.getTime();
     return timeSinceLastActivity > idleTimeoutMs;
 }
@@ -207,9 +184,8 @@ export function isAgentIdle(): boolean {
  */
 async function shouldContinueToNextIteration(): Promise<boolean> {
     const statusManager = StatusManager.getInstance();
-    const currentState = statusManager.getCurrentState();
+    const currentState = statusManager.getState();
 
-    // Don't continue if we're in a terminal or error state
     if (currentState === WorkflowState.Idle ||
         currentState === WorkflowState.Paused ||
         currentState === WorkflowState.Error ||
@@ -217,17 +193,13 @@ async function shouldContinueToNextIteration(): Promise<boolean> {
         return false;
     }
 
-    // Check if all checklist items are completed
     const checklistCompleted = await verifyChecklistCompletion();
     if (!checklistCompleted) {
-        // If checklist is not complete, continue to the next iteration
         return true;
     }
 
-    // Ask the agent directly if it has completed the current task
     const response = await promptAgentForCompletion();
     if (response && typeof response === 'string') {
-        // Look for indicators that the task is not yet complete
         const needsToContinue = response.toLowerCase().includes('not complete') ||
             response.toLowerCase().includes('still working') ||
             response.toLowerCase().includes('in progress');
@@ -235,7 +207,6 @@ async function shouldContinueToNextIteration(): Promise<boolean> {
         return needsToContinue;
     }
 
-    // Default behavior: don't continue if we can't determine status
     return false;
 }
 
@@ -244,12 +215,8 @@ async function shouldContinueToNextIteration(): Promise<boolean> {
  * @returns Promise resolving to true if all items are completed, false otherwise
  */
 async function verifyChecklistCompletion(): Promise<boolean> {
-    // Send the checklist verification prompt
-    await sendFileToChat('CHECK_CHECKLIST.md');
-
-    // This would ideally analyze the agent's response
-    // For now, we're using a placeholder that assumes not all items are complete
-    return false; // Placeholder implementation
+    await sendPromptFileToChat('check_checklist.md');
+    return false;
 }
 
 /**
@@ -257,12 +224,12 @@ async function verifyChecklistCompletion(): Promise<boolean> {
  * @returns Promise resolving to the agent's response or null if unavailable
  */
 async function promptAgentForCompletion(): Promise<string | null> {
-    await openChat();
-    await vscode.commands.executeCommand('github.copilot-chat.sendMessage', {
-        message: "Have you completed implementing all the features described in the checklist?"
-    });
+    const success = await sendChatMessage("Have you completed implementing all the features described in the checklist?");
 
-    // This would ideally capture and return the agent's response
-    // For now, we're using a placeholder
-    return null; // Placeholder implementation
+    if (!success) {
+        console.error("Failed to send completion prompt to agent.");
+        return null;
+    }
+
+    return null;
 }

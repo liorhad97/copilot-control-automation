@@ -93,6 +93,14 @@ export class StatusManager {
     }
 
     /**
+     * Get the time the state was last updated
+     * Added to expose lastUpdateTime for idle checks
+     */
+    public getLastUpdateTime(): Date {
+        return this.lastUpdateTime;
+    }
+
+    /**
      * Register a listener for state changes
      * @param listener The callback function to be called when the state changes
      */

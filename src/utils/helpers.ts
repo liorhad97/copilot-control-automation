@@ -15,15 +15,6 @@ export function getNonce(): string {
 }
 
 /**
- * Sleep for the specified duration
- * @param ms Milliseconds to sleep
- * @returns Promise that resolves after the specified time
- */
-export function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
  * Format a string to title case
  * @param str String to format
  * @returns Title cased string
@@ -113,4 +104,13 @@ export async function setAgentMode(mode: 'Agent' | 'Edit' | 'Ask'): Promise<void
     } catch (error) {
         console.error(`Failed to set agent mode to ${mode}:`, error);
     }
+}
+
+/**
+ * Sleep for a specified number of milliseconds
+ * @param ms Number of milliseconds to sleep
+ * @returns A promise that resolves after the specified time
+ */
+export function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
