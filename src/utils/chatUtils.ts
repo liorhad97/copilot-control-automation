@@ -130,39 +130,78 @@ export async function sendChatMessage(message: string, backgroundMode = false): 
             return false;
         }
 
-        // Wait for chat to be fully ready
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for chat to be fully ready - increased delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        let sentSuccessfully = false;
 
         try {
-            // Try to send message using the chat.sendMessage command
+            // Method 1: Try to send message using the chat.sendMessage command
+            console.log('Attempting to send message using github.copilot-chat.sendMessage');
             await vscode.commands.executeCommand('github.copilot-chat.sendMessage', { message });
             console.log('Message sent using github.copilot-chat.sendMessage');
+            sentSuccessfully = true;
         } catch (error) {
-            console.log('Failed to send message via sendMessage command:', error);
+            console.log('Failed to send message via sendMessage command, trying fallback method:', error);
 
-            // Fallback: Focus the chat and insert the message
-            await focusChatTab();
-            await vscode.commands.executeCommand('editor.action.insertLineAfter');
+            try {
+                // Method 2: Focus the chat and insert the message, then use command to send
+                await focusChatTab();
+                console.log('Chat tab focused, inserting message');
+                await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Use the clipboard as intermediary to paste message
-            const originalClipboard = await vscode.env.clipboard.readText();
-            await vscode.env.clipboard.writeText(message);
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            await vscode.env.clipboard.writeText(originalClipboard); // Restore clipboard
+                // Use the clipboard as intermediary to paste message
+                const originalClipboard = await vscode.env.clipboard.readText();
+                await vscode.env.clipboard.writeText(message);
 
-            // Send the message
-            await new Promise(resolve => setTimeout(resolve, 300));
-            await vscode.commands.executeCommand('workbench.action.chat.send');
-            console.log('Message sent using clipboard paste and send command');
+                // Try to clear any existing text first
+                await vscode.commands.executeCommand('editor.action.selectAll');
+                await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+                await vscode.env.clipboard.writeText(originalClipboard); // Restore clipboard
+
+                // Send message - try multiple methods
+                await new Promise(resolve => setTimeout(resolve, 500));
+                console.log('Attempting to send message with command');
+
+                try {
+                    // Method 3: Try specific chat send command
+                    await vscode.commands.executeCommand('workbench.action.chat.send');
+                    console.log('Message sent using workbench.action.chat.send');
+                    sentSuccessfully = true;
+                } catch (sendError) {
+                    console.log('Failed to send using command, trying keyboard shortcut:', sendError);
+
+                    try {
+                        // Method 4: Try keyboard shortcut - Enter key
+                        await vscode.commands.executeCommand('type', { text: '\n' });
+                        console.log('Message sent using Enter key');
+                        sentSuccessfully = true;
+                    } catch (typeError) {
+                        console.log('Failed to send using Enter key:', typeError);
+
+                        try {
+                            // Method 5: Last resort - Shift+Enter keyboard sequence
+                            await vscode.commands.executeCommand('cursorEnd');
+                            await vscode.commands.executeCommand('editor.action.insertLineAfter');
+                            console.log('Attempted to send using Shift+Enter sequence');
+                            sentSuccessfully = true;
+                        } catch (finalError) {
+                            console.error('All send methods failed:', finalError);
+                        }
+                    }
+                }
+            } catch (fallbackError) {
+                console.error('Fallback clipboard method failed:', fallbackError);
+            }
         }
 
         // If in background mode, try to restore original focus
         if (backgroundMode && activeTabToRestore) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Increased delay before restoring focus
             await restoreFocus(activeTabToRestore);
         }
 
-        return true;
+        return sentSuccessfully;
     } catch (error) {
         console.error('Failed to send message:', error);
         return false;

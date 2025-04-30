@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from '../statusManager';
 // Updated import paths for utils
@@ -150,7 +148,7 @@ export async function continueDevelopment(context: vscode.ExtensionContext): Pro
         statusManager.setState(WorkflowState.SendingTask, `Starting iteration #${iterationCount}`);
 
         // Load the continue iteration prompt
-        const continuePrompt = await loadPromptFile('continue_iteration');
+        const continuePrompt = await loadPromptFile(context, 'continue_iteration');
 
         // Send the continue prompt
         await sendChatMessage(`@agent Continue: "${continuePrompt}"`, backgroundMode);
@@ -248,29 +246,34 @@ async function checkContinue(): Promise<void> {
 }
 
 /**
- * Loads a prompt file from the prompts directory
+ * Loads a prompt file from the prompts directory using the extension context
+ * @param context The VS Code extension context
  * @param fileName The name of the prompt file (without extension)
  * @returns The content of the prompt file
  */
-async function loadPromptFile(fileName: string): Promise<string> {
-    try {
-        // Use __dirname which is reliable in extensions
-        const extensionPath = path.resolve(__dirname, '../..'); // Go up two levels from src/workflows
+async function loadPromptFile(context: vscode.ExtensionContext, fileName: string): Promise<string> {
+    const filePathBase = vscode.Uri.joinPath(context.extensionUri, 'src', 'prompts', fileName);
+    const txtFilePath = filePathBase.with({ path: filePathBase.path + '.txt' });
+    const mdFilePath = filePathBase.with({ path: filePathBase.path + '.md' });
 
-        // Construct the path using .txt extension
-        const promptPath = path.join(extensionPath, 'src', 'prompts', `${fileName}.txt`);
-        return fs.readFileSync(promptPath, 'utf8');
+    try {
+        console.log(`Attempting to load prompt from: ${txtFilePath.fsPath}`);
+        const contentBytes = await vscode.workspace.fs.readFile(txtFilePath);
+        const content = new TextDecoder().decode(contentBytes);
+        console.log(`Successfully loaded prompt from ${txtFilePath.fsPath}`);
+        return content;
     } catch (error) {
-        console.error(`Error loading prompt file ${fileName}.txt:`, error);
-        // Try with .md as a fallback, just in case
+        console.warn(`Failed to load prompt ${fileName}.txt: ${error}. Trying .md fallback.`);
         try {
-            const extensionPath = path.resolve(__dirname, '../..');
-            const mdPromptPath = path.join(extensionPath, 'src', 'prompts', `${fileName}.md`);
-            console.warn(`Falling back to loading ${fileName}.md`);
-            return fs.readFileSync(mdPromptPath, 'utf8');
+            console.log(`Attempting to load prompt from: ${mdFilePath.fsPath}`);
+            const contentBytes = await vscode.workspace.fs.readFile(mdFilePath);
+            const content = new TextDecoder().decode(contentBytes);
+            console.log(`Successfully loaded prompt from ${mdFilePath.fsPath}`);
+            return content;
         } catch (mdError) {
-            console.error(`Also failed to load fallback ${fileName}.md:`, mdError);
-            return `Could not load prompt ${fileName}.txt or ${fileName}.md. Please continue with the development iteration.`;
+            console.error(`Failed to load prompt ${fileName} (.txt or .md):`, mdError);
+            // Return a specific error message that can be sent to chat if needed
+            return `Error: Could not load prompt file '${fileName}'. Please check extension installation and file paths.`;
         }
     }
 }
@@ -371,11 +374,11 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
         statusManager.setState(WorkflowState.SendingTask, `Sending development checklist${iterationMessage}`);
 
         // Load init prompt (pass filename without extension)
-        const initPrompt = await loadPromptFile('init');
+        const initPrompt = await loadPromptFile(context, 'init');
         await sendChatMessage(`@agent ${initPrompt}`, backgroundMode);
 
         // Send checklist after init prompt
-        await sendChecklistToChat();
+        await sendChecklistToChat(context);
 
         // Allow time for agent to process (Increased delay)
         await sleep(4000); // Increased from 2000
@@ -385,7 +388,7 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
         statusManager.setState(WorkflowState.CheckingStatus, `Checking agent progress${iterationMessage}`);
 
         // Load check_agent prompt (pass filename without extension)
-        const checkAgentPrompt = await loadPromptFile('check_agent');
+        const checkAgentPrompt = await loadPromptFile(context, 'check_agent');
         await sendChatMessage(`@agent ${checkAgentPrompt}`, backgroundMode);
 
         // Allow time for agent to respond (Increased delay)
@@ -398,7 +401,7 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
             statusManager.setState(WorkflowState.RequestingTests, `Requesting test implementation${iterationMessage}`);
 
             // Load write_tests prompt (pass filename without extension)
-            const writeTestsPrompt = await loadPromptFile('write_tests');
+            const writeTestsPrompt = await loadPromptFile(context, 'write_tests');
             await sendChatMessage(`@agent ${writeTestsPrompt}`, backgroundMode);
 
             // Allow time for agent to process (Increased delay)
@@ -408,7 +411,7 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
             // Check status again
             statusManager.setState(WorkflowState.CheckingStatus, `Checking agent progress on tests${iterationMessage}`);
             // Load test progress prompt (pass filename without extension)
-            const testProgressPrompt = await loadPromptFile('test_progress');
+            const testProgressPrompt = await loadPromptFile(context, 'test_progress');
             await sendChatMessage(`@agent ${testProgressPrompt}`, backgroundMode);
 
             // Allow time for agent to respond (Increased delay)
@@ -420,20 +423,20 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
         statusManager.setState(WorkflowState.VerifyingChecklist, `Verifying checklist completion${iterationMessage}`);
 
         // Load check_checklist prompt (pass filename without extension)
-        const checkChecklistPrompt = await loadPromptFile('check_checklist');
+        const checkChecklistPrompt = await loadPromptFile(context, 'check_checklist');
         await sendChatMessage(`@agent ${checkChecklistPrompt}`, backgroundMode);
 
         // Allow time for agent to respond (Increased delay)
         await sleep(6000); // Increased from 3000
 
         // 5) Loop back or continue based on checklist status
-        const continueToNextIteration = await shouldContinueToNextIteration();
+        const continueToNextIteration = await shouldContinueToNextIteration(context);
         if (continueToNextIteration) {
             iterationCount++;
             statusManager.setState(WorkflowState.ContinuingIteration, `Starting iteration ${iterationCount}`);
 
             // Load continue_iteration prompt (pass filename without extension)
-            const continueIterationPrompt = await loadPromptFile('continue_iteration');
+            const continueIterationPrompt = await loadPromptFile(context, 'continue_iteration');
             await sendChatMessage(`@agent ${continueIterationPrompt}`, backgroundMode);
 
             // Allow time for agent to process (Increased delay)
@@ -457,47 +460,30 @@ async function developmentWorkflow(context: vscode.ExtensionContext): Promise<vo
 /**
  * Sends the development checklist to the chat
  */
-async function sendChecklistToChat(): Promise<void> {
+async function sendChecklistToChat(context: vscode.ExtensionContext): Promise<void> {
     // Load checklist from prompt file (pass filename without extension)
-    const checklist = await loadPromptFile('checklist');
+    const checklist = await loadPromptFile(context, 'checklist');
     await sendChatMessage(checklist, backgroundMode);
 }
 
 /**
  * Sends test writing instructions to the chat
  */
-async function sendTestInstructionsToChat(): Promise<void> {
-    // Load test instructions from prompt file (pass filename without extension)
-    const testInstructions = await loadPromptFile('test_instructions');
-    await sendChatMessage(testInstructions, backgroundMode);
+async function sendTestInstructionsToChat(context: vscode.ExtensionContext): Promise<void> {
+    // Implementation here
 }
 
 /**
- * Sends verification instructions to the chat
- */
-async function sendVerificationToChat(): Promise<void> {
-    // Load verification instructions from prompt file (pass filename without extension)
-    const verification = await loadPromptFile('verify_completion');
-    await sendChatMessage(verification, backgroundMode);
-}
-
-/**
- * Creates and checks out a new Git branch
+ * Creates and checks out a new branch
  */
 async function createAndCheckoutBranch(): Promise<boolean> {
     try {
-        // Try to get the Git extension
         const gitExtension = vscode.extensions.getExtension<any>('vscode.git');
-
         if (gitExtension) {
             const git = gitExtension.exports.getAPI(1);
-
             if (git.repositories.length > 0) {
                 const repo = git.repositories[0];
-                // Generate branch name with timestamp
                 const branchName = `feature/marco-${Date.now()}`;
-
-                // Create and checkout the branch
                 await repo.createBranch(branchName, true);
                 vscode.window.showInformationMessage(`Created and checked out branch: ${branchName}`);
                 return true;
@@ -510,24 +496,13 @@ async function createAndCheckoutBranch(): Promise<boolean> {
     } catch (error) {
         vscode.window.showErrorMessage(`Failed to create branch: ${error}`);
     }
-
     return false;
 }
 
 /**
- * Check if the agent is idle
- * Would be implemented based on how you track agent activity
+ * Determines whether to continue to the next iteration
  */
-export function isAgentIdle(): boolean {
-    // This is a placeholder
+async function shouldContinueToNextIteration(context: vscode.ExtensionContext): Promise<boolean> {
+    // Placeholder: always return false (no further iterations)
     return false;
-}
-
-/**
- * Determines if the workflow should continue to the next iteration
- * @returns True if the workflow should continue, false otherwise
- */
-async function shouldContinueToNextIteration(): Promise<boolean> {
-    // Placeholder for logic to determine if the workflow should continue
-    return true;
 }
