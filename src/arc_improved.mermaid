@@ -1,0 +1,162 @@
+classDiagram
+    class WorkflowAPI {
+        +isWorkflowRunning() boolean
+        +isWorkflowPaused() boolean
+        +isBackgroundMode() boolean
+        +setBackgroundMode(enabled) void
+        +getIterationCount() number
+        +runWorkflow(context, action) Promise
+        +pauseWorkflow() void
+        +resumeWorkflow(context) void
+        +stopWorkflow() Promise
+    }
+    
+    class WorkflowManager {
+        -isRunning: boolean
+        -isPaused: boolean
+        -backgroundMode: boolean
+        -iterationCount: number
+        -currentWorkflowPromise: Promise
+        +isWorkflowRunning() boolean
+        +isWorkflowPaused() boolean
+        +isBackgroundMode() boolean
+        +setBackgroundMode(enabled) void
+        +getIterationCount() number
+        +runWorkflow(context, action) Promise
+        +continueDevelopment(context) Promise
+        +pauseWorkflow() void
+        +resumeWorkflow(context) void
+        +stopWorkflow() Promise
+        -initialSetup(context) Promise
+        -developmentWorkflow(context) Promise
+        -loadPromptFile(context, fileName) Promise
+        -sendChecklistToChat(context) Promise
+        -createAndCheckoutBranch() Promise
+        -shouldContinueToNextIteration(context) Promise
+        -checkContinue() Promise
+    }
+    
+    class StatusManager {
+        -instance: StatusManager
+        -currentState: WorkflowState
+        -statusBarItem: StatusBarItem
+        -lastUpdateTime: Date
+        -animationFrames: string[]
+        -animationIndex: number
+        -animationInterval: Timeout
+        -stateChangeListeners: StateChangeListener[]
+        +getInstance() StatusManager
+        +initialize(context) void
+        +setState(state, message) void
+        +getState() WorkflowState
+        +getLastUpdateTime() Date
+        +onStateChanged(listener) Disposable
+        -notifyStateChangeListeners(state, message) void
+        -updateStatusBar(message) void
+        -formatStateName(state) string
+        -getStateEmoji() string
+        -setStatusBarColor() void
+        -getElapsedTime() string
+        -startAnimation() void
+        -stopAnimation() void
+        -showStateNotification(state, message) void
+        +dispose() void
+    }
+    
+    class WorkflowState {
+        <<enumeration>>
+        Idle
+        Initializing
+        CreatingBranch
+        SendingTask
+        CheckingStatus
+        RequestingTests
+        VerifyingCompletion
+        VerifyingChecklist
+        ContinuingIteration
+        Paused
+        Completed
+        Error
+    }
+    
+    class FloatingControlsPanel {
+        -panel: WebviewPanel
+        -context: ExtensionContext
+        -disposables: Disposable[]
+        -statusBarItem: StatusBarItem
+        +constructor(context)
+        +show() void
+        -updatePanelContent() void
+        +dispose() void
+    }
+    
+    class SidebarProvider {
+        -_view: WebviewView
+        -_extensionUri: Uri
+        -_context: ExtensionContext
+        +constructor(extensionUri, context)
+        +resolveWebviewView(webviewView, context, token) void
+        -_updateToggleButtonState(isRunning) Promise
+        -_getHtmlForWebview(webview) string
+    }
+    
+    class ChatUtils {
+        +ensureChatOpen(retries, delayMs, focusChat) Promise
+        +sendChatMessage(message, backgroundMode) Promise
+        +selectAIModel(modelName) Promise
+        +isAgentIdle() Promise
+        +isAgentWorking() Promise
+        -focusChatTab() Promise
+        -restoreFocus(tabToRestore) Promise
+    }
+    
+    class Helpers {
+        +getNonce() string
+        +toTitleCase(str) string
+        +readPromptFile(filename) Promise
+        +sendPromptToChat(promptContent) Promise
+        +isChatViewOpen() boolean
+        +ensureChatViewOpen() Promise
+        +setAgentMode(mode) Promise
+        +sleep(ms) Promise
+    }
+    
+    class WorkflowErrors {
+        +WorkflowCancelledError
+        +WorkflowTimeoutError
+        +ConfigurationError
+        +CommunicationError
+        +GitOperationError
+        +PromptLoadError
+    }
+    
+    class Extension {
+        +activate(context) void
+        +deactivate() void
+    }
+    
+    class Commands {
+        +registerCommands(context) void
+    }
+    
+    class Monitoring {
+        +setupMonitoringTimers(context) void
+        +clearMonitoringTimers() void
+    }
+
+    WorkflowAPI ..> WorkflowManager : uses
+    Extension --> Commands : registers
+    Extension --> Monitoring : controls
+    Extension --> StatusManager : initializes
+    Extension --> SidebarProvider : creates
+    Extension --> FloatingControlsPanel : creates
+    WorkflowManager --> StatusManager : updates
+    WorkflowManager --> ChatUtils : communicates
+    WorkflowManager ..> WorkflowErrors : throws
+    WorkflowManager ..> Helpers : utility
+    Commands --> WorkflowManager : invokes
+    StatusManager --> WorkflowState : uses
+    FloatingControlsPanel --> WorkflowManager : controls
+    SidebarProvider --> StatusManager : observes
+    SidebarProvider --> WorkflowManager : controls
+    Monitoring --> WorkflowManager : monitors
