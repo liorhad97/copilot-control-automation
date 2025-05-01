@@ -35,6 +35,9 @@ classDiagram
     
     class WorkflowCommandExecutor {
         -context: ExtensionContext
+        -promptLoader: PromptLoader
+        -statusManager: StatusManager
+        -configManager: ConfigurationManager
         +sleep(ms): Promise
         +executeInitialSetup(backgroundMode): Promise
         +executeDevelopmentWorkflow(backgroundMode, iterationCount): Promise
@@ -45,6 +48,7 @@ classDiagram
     }
     
     class ConfigurationManager {
+        -EXTENSION_ID: string
         +getInstance(): ConfigurationManager
         -getConfig(): WorkspaceConfiguration
         +getBackgroundMode(): boolean
@@ -53,6 +57,9 @@ classDiagram
         +shouldCreateBranch(): boolean
         +shouldWriteTests(): boolean
         +getMaxIterations(): number
+        +getIdleTimeoutSeconds(): number
+        +getCheckAgentFrequency(): number
+        +getEnsureChatFrequency(): number
         +updateSetting(key, value, target): Promise
     }
     
@@ -80,25 +87,84 @@ classDiagram
     }
     
     class StatusManager {
-        -state: WorkflowState
+        -currentState: WorkflowState
         -statusBarItem: StatusBarItem
+        -lastUpdateTime: Date
+        -animationFrames: string[]
+        -animationIndex: number
+        -animationInterval: Timeout
+        -stateChangeListeners: StateChangeListener[]
         +getInstance(): StatusManager
+        +initialize(context): void
         +setState(state, message): void
         +getState(): WorkflowState
+        +getLastUpdateTime(): Date
+        +onStateChanged(listener): Disposable
+        -notifyStateChangeListeners(state, message): void
+        -updateStatusBar(message): void
+        -formatStateName(state): string
+        -getStateEmoji(): string
+        -setStatusBarColor(): void
+        -getElapsedTime(): string
+        -startAnimation(): void
+        -stopAnimation(): void
+        -showStateNotification(state, message): void
+        +dispose(): void
     }
     
-    class chatUtils {
+    class ChatUtils {
+        -lastMessageTime: number
+        -IDLE_THRESHOLD: number
         +ensureChatOpen(maxAttempts, delayBetweenAttempts, shouldFocus): Promise
+        -focusChatTab(): Promise
+        +sendChatMessage(message, backgroundMode): Promise
+        -restoreFocus(tabToRestore): Promise
         +selectAIModel(modelName): Promise
-        +sendChatMessage(message, inBackground): Promise
+        +isAgentIdle(): Promise
+        +isAgentWorking(): Promise
     }
     
-    class helpers {
+    class MonitoringService {
+        -checkAgentTimer: Timeout
+        -ensureChatTimer: Timeout
+        -context: ExtensionContext
+        -configManager: ConfigurationManager
+        +initialize(context): void
+        -setupMonitoringTimers(): void
+        +clearMonitoringTimers(): void
+    }
+    
+    class CommandRegistrar {
+        +registerCommands(context): void
+    }
+    
+    class FloatingControlsPanel {
+        -panel: WebviewPanel
+        -context: ExtensionContext
+        -disposables: Disposable[]
+        -statusBarItem: StatusBarItem
+        +show(): void
+        -updatePanelContent(): void
+        +dispose(): void
+    }
+    
+    class SidebarProvider {
+        -_view: WebviewView
+        -context: ExtensionContext
+        -configManager: ConfigurationManager
+        +resolveWebviewView(webviewView, context, token): void
+        -_updateToggleButtonState(isRunning): Promise
+        -_getHtmlForWebview(webview): string
+    }
+    
+    class Helpers {
         +sleep(ms): Promise
         +getTimestampString(): string
         +toCamelCase(str): string
         +generateUniqueId(): string
         +retry(fn, maxAttempts, delayMs): Promise
+        +getNonce(): string
+        +toTitleCase(str): string
     }
     
     workflow --> WorkflowManager : Facade
@@ -108,5 +174,16 @@ classDiagram
     WorkflowCommandExecutor --> StatusManager : updates
     WorkflowCommandExecutor --> PromptLoader : loads prompts
     WorkflowCommandExecutor --> GitService : performs git operations
-    WorkflowCommandExecutor --> chatUtils : sends messages
-    WorkflowCommandExecutor ..> helpers : utility functions
+    WorkflowCommandExecutor --> ChatUtils : sends messages
+    WorkflowCommandExecutor --> ConfigurationManager : uses
+    WorkflowCommandExecutor ..> Helpers : utility functions
+    CommandRegistrar --> WorkflowManager : manages
+    CommandRegistrar --> ChatUtils : uses
+    CommandRegistrar --> ConfigurationManager : uses
+    FloatingControlsPanel --> WorkflowManager : controls
+    SidebarProvider --> WorkflowManager : controls
+    SidebarProvider --> ConfigurationManager : uses
+    SidebarProvider --> StatusManager : monitors
+    MonitoringService --> ChatUtils : uses
+    MonitoringService --> ConfigurationManager : uses
+    MonitoringService --> WorkflowManager : monitors
