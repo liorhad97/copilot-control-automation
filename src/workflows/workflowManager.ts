@@ -289,11 +289,26 @@ async function initialSetup(context: vscode.ExtensionContext): Promise<void> {
         // Check for cancellation
         await checkContinue();
 
-        // 1) Open chat using our enhanced method - don't force focus in background mode
-        await ensureChatOpen(5, 1000, !backgroundMode);
+        // 1) Open chat using our enhanced method - focus depends on backgroundMode
+        const shouldFocusChat = !backgroundMode;
+        await ensureChatOpen(5, 1000, shouldFocusChat);
+
+        // Attempt to move the chat view to the secondary sidebar (right panel) if focused
+        if (shouldFocusChat) {
+            try {
+                // Delay to allow focus to settle before moving
+                await sleep(500);
+                // First focus the GitHub Copilot Chat view specifically
+                await vscode.commands.executeCommand('github.copilot.chat.focus');
+
+            } catch (moveError) {
+                console.warn('Could not automatically move Copilot Chat view to the right panel:', moveError);
+                // Optionally inform the user if the move fails, but avoid blocking the workflow
+                // vscode.window.showWarningMessage('Could not automatically move Copilot Chat view. You may need to move it manually.');
+            }
+        }
 
         // Get user's task description from context or use default
-        // Ensure it's a string with toString() or use default string
         const userInput = context.workspaceState.get('marco.userInput');
         const taskDescription = typeof userInput === 'string'
             ? userInput

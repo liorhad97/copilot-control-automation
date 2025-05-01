@@ -61,6 +61,10 @@
       {
         "command": "marco.showWelcome",
         "title": "Marco AI: Show Welcome Page"
+      },
+      {
+        "command": "marco.showFloatingControls",
+        "title": "Marco AI: Show Floating Controls Panel"
       }
     ],
     "configuration": {

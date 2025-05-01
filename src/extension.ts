@@ -1,17 +1,26 @@
 import * as vscode from 'vscode';
-import { registerCommands } from './commands'; // Import from new file
-import { clearMonitoringTimers, setupMonitoringTimers } from './monitoring'; // Import from new file
+import { registerCommands } from './commands';
+import { clearMonitoringTimers, setupMonitoringTimers } from './monitoring';
 import { StatusManager } from './statusManager';
+import { FloatingControlsPanel } from './ui/floatingControlsPanel';
 import { SidebarProvider } from './ui/sidebarProvider';
-// Removed unused imports: ensureChatOpen, sendChatMessage, isAgentIdle, isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow
 
+// Global variable to hold the floating controls panel instance
+let floatingControlsPanel: FloatingControlsPanel | undefined;
+
+/**
+ * Displays a welcome page in a webview panel for first-time users.
+ * @param context The extension context provided by VSCode.
+ */
 function showWelcomePage(context: vscode.ExtensionContext) {
 	const panel = vscode.window.createWebviewPanel(
-		'marcoWelcome',
-		'Welcome to Marco AI',
-		vscode.ViewColumn.One,
-		{ enableScripts: true }
+		'marcoWelcome',           // Unique identifier for the panel
+		'Welcome to Marco AI',    // Panel title
+		vscode.ViewColumn.One,    // Display in the first editor column
+		{ enableScripts: true }   // Enable JavaScript in the webview
 	);
+
+	// Simple HTML content for the welcome page
 	panel.webview.html = `
         <html>
         <head>
@@ -34,6 +43,11 @@ function showWelcomePage(context: vscode.ExtensionContext) {
     `;
 }
 
+/**
+ * Called when the extension is activated.
+ * Sets up the status manager, UI components, commands, and timers.
+ * @param context The extension context provided by VSCode.
+ */
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Marco AI extension is now active');
 
@@ -50,6 +64,21 @@ export function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
+	// Initialize the floating controls panel
+	floatingControlsPanel = new FloatingControlsPanel(context);
+
+	// Register command to show floating controls
+	context.subscriptions.push(
+		vscode.commands.registerCommand('marco.showFloatingControls', () => {
+			if (floatingControlsPanel) {
+				floatingControlsPanel.show();
+			}
+		})
+	);
+
+	// Auto-show floating controls panel on activation
+	floatingControlsPanel.show();
+
 	// Register commands from the dedicated file
 	registerCommands(context);
 
@@ -61,19 +90,31 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('marco.showWelcome', () => showWelcomePage(context))
 	);
 
-	// Show welcome page on first activation
+	// Show welcome page only on first activation
 	const hasShownWelcome = context.globalState.get('marco.hasShownWelcome');
 	if (!hasShownWelcome) {
 		showWelcomePage(context);
 		context.globalState.update('marco.hasShownWelcome', true);
 	}
 
+	// Notify user
 	vscode.window.showInformationMessage('Marco AI is ready to help!');
 }
 
+/**
+ * Called when the extension is deactivated.
+ * Cleans up resources like the floating controls panel and timers.
+ */
 export function deactivate() {
 	console.log('Marco AI extension is now deactivated');
-	// Clear timers on deactivation
+
+	// **Clean Up Resources**
+	// Dispose of the floating controls panel if it exists
+	if (floatingControlsPanel) {
+		floatingControlsPanel.dispose();
+		floatingControlsPanel = undefined;
+	}
+
+	// Clear any active monitoring timers
 	clearMonitoringTimers();
-	// Any other cleanup logic goes here
 }

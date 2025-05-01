@@ -7,125 +7,125 @@ import { isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, stopWork
  * SidebarProvider for Marco AI webview panel
  */
 export class SidebarProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'marco-ai.sidebar';
-    private _view?: vscode.WebviewView;
+  public static readonly viewType = 'marco-ai.sidebar';
+  private _view?: vscode.WebviewView;
 
-    constructor(
-        private readonly _extensionUri: vscode.Uri,
-        private readonly _context: vscode.ExtensionContext
-    ) { }
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _context: vscode.ExtensionContext
+  ) { }
 
-    resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken
-    ) {
-        this._view = webviewView;
+  resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ) {
+    this._view = webviewView;
 
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [this._extensionUri],
-        };
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri],
+    };
 
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        // Handle messages from the webview
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case 'toggleWorkflow': {
-                    if (isWorkflowRunning()) {
-                        stopWorkflow();
-                        await this._updateToggleButtonState(false);
-                    } else {
-                        runWorkflow(this._context, 'play');
-                        await this._updateToggleButtonState(true);
-                    }
-                    break;
-                }
-                case 'pauseWorkflow': {
-                    if (isWorkflowRunning()) {
-                        pauseWorkflow();
-                    } else {
-                        resumeWorkflow(this._context);
-                    }
-                    break;
-                }
-                case 'restartWorkflow': {
-                    runWorkflow(this._context, 'restart');
-                    await this._updateToggleButtonState(true);
-                    break;
-                }
-                case 'updateConfig': {
-                    const config = vscode.workspace.getConfiguration('marco');
-                    await config.update(data.key, data.value, vscode.ConfigurationTarget.Global);
-                    break;
-                }
-                case 'userInput': {
-                    // Store user input in context for use in workflow
-                    this._context.workspaceState.update('marco.userInput', data.value);
-                    break;
-                }
-                case 'getConfigValues': {
-                    // Send current config values to the webview
-                    const config = vscode.workspace.getConfiguration('marco');
-                    this._view?.webview.postMessage({
-                        type: 'configValues',
-                        initCreateBranch: config.get('initCreateBranch'),
-                        needToWriteTest: config.get('needToWriteTest'),
-                        agentMode: config.get('agentMode') || 'Agent',
-                        workflowRunning: isWorkflowRunning()
-                    });
-                    break;
-                }
-            }
-        });
-
-        // Update the sidebar with current status when workflow state changes
-        const statusManager = StatusManager.getInstance();
-        statusManager.onStateChanged((state) => {
-            if (this._view) {
-                this._view.webview.postMessage({
-                    type: 'stateUpdate',
-                    state: state,
-                    isRunning: isWorkflowRunning(),
-                    isPaused: state === WorkflowState.Paused
-                });
-            }
-        });
-    }
-
-    /**
-     * Update the play/stop toggle button state in the webview
-     */
-    private async _updateToggleButtonState(isRunning: boolean) {
-        if (this._view) {
-            this._view.webview.postMessage({
-                type: 'workflowToggle',
-                isRunning
-            });
+    // Handle messages from the webview
+    webviewView.webview.onDidReceiveMessage(async (data) => {
+      switch (data.type) {
+        case 'toggleWorkflow': {
+          if (isWorkflowRunning()) {
+            stopWorkflow();
+            await this._updateToggleButtonState(false);
+          } else {
+            runWorkflow(this._context, 'play');
+            await this._updateToggleButtonState(true);
+          }
+          break;
         }
+        case 'pauseWorkflow': {
+          if (isWorkflowRunning()) {
+            pauseWorkflow();
+          } else {
+            resumeWorkflow(this._context);
+          }
+          break;
+        }
+        case 'restartWorkflow': {
+          runWorkflow(this._context, 'restart');
+          await this._updateToggleButtonState(true);
+          break;
+        }
+        case 'updateConfig': {
+          const config = vscode.workspace.getConfiguration('marco');
+          await config.update(data.key, data.value, vscode.ConfigurationTarget.Global);
+          break;
+        }
+        case 'userInput': {
+          // Store user input in context for use in workflow
+          this._context.workspaceState.update('marco.userInput', data.value);
+          break;
+        }
+        case 'getConfigValues': {
+          // Send current config values to the webview
+          const config = vscode.workspace.getConfiguration('marco');
+          this._view?.webview.postMessage({
+            type: 'configValues',
+            initCreateBranch: config.get('initCreateBranch'),
+            needToWriteTest: config.get('needToWriteTest'),
+            agentMode: config.get('agentMode') || 'Agent',
+            workflowRunning: isWorkflowRunning()
+          });
+          break;
+        }
+      }
+    });
+
+    // Update the sidebar with current status when workflow state changes
+    const statusManager = StatusManager.getInstance();
+    statusManager.onStateChanged((state) => {
+      if (this._view) {
+        this._view.webview.postMessage({
+          type: 'stateUpdate',
+          state: state,
+          isRunning: isWorkflowRunning(),
+          isPaused: state === WorkflowState.Paused
+        });
+      }
+    });
+  }
+
+  /**
+   * Update the play/stop toggle button state in the webview
+   */
+  private async _updateToggleButtonState(isRunning: boolean) {
+    if (this._view) {
+      this._view.webview.postMessage({
+        type: 'workflowToggle',
+        isRunning
+      });
     }
+  }
 
-    /**
-     * Generate HTML for the sidebar webview
-     */
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'sidebar.js')
-        );
+  /**
+   * Generate HTML for the sidebar webview
+   */
+  private _getHtmlForWebview(webview: vscode.Webview) {
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'media', 'sidebar.js')
+    );
 
-        const styleUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'sidebar.css')
-        );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'media', 'sidebar.css')
+    );
 
-        const codiconsUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
-        );
+    const codiconsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
+    );
 
-        // Use a nonce to only allow a specific script to be run
-        const nonce = getNonce();
+    // Use a nonce to only allow a specific script to be run
+    const nonce = getNonce();
 
-        return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
       <html lang="en">
       <head>
         <meta charset="UTF-8">
@@ -229,5 +229,5 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <script nonce="${nonce}" src="${scriptUri}"></script>
       </body>
       </html>`;
-    }
+  }
 }

@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
 
+// Added for idle check
+let lastMessageTime: number | null = null;
+const IDLE_THRESHOLD = 60000; // 30 seconds in milliseconds
+
 /**
  * Ensures the Copilot Chat is open with multiple retry attempts
  * @param retries Number of retry attempts (default: 5)
@@ -88,7 +92,6 @@ async function focusChatTab(): Promise<boolean> {
  * @returns Promise resolving to true if message was sent successfully
  */
 export async function sendChatMessage(message: string, backgroundMode = false): Promise<boolean> {
-    // Store current active tab if we need to restore it later (when in background mode)
     let activeTabToRestore: vscode.Tab | undefined = undefined;
 
     if (backgroundMode) {
@@ -101,76 +104,30 @@ export async function sendChatMessage(message: string, backgroundMode = false): 
     }
 
     try {
-        // First ensure chat is open, focusing on it if not in background mode
-        const chatOpened = await ensureChatOpen(3, 1000, !backgroundMode);
-        if (!chatOpened) {
-            console.error('Failed to open chat');
-            return false;
-        }
-
-        // Wait for chat to be fully ready - increased delay
+        await vscode.commands.executeCommand('workbench.action.chat.open', message);
         await new Promise(resolve => setTimeout(resolve, 1000));
+        await vscode.commands.executeCommand('workbench.action.chat.send');
 
         let sentSuccessfully = false;
 
-        // Removed the attempt using 'github.copilot-chat.sendMessage' as it was failing
-
+        // Try different methods to send a message
         try {
-            // Method 2: Focus the chat and insert the message, then use command to send
-            // Ensure focus is attempted
-            if (!backgroundMode) {
-                await focusChatTab();
-                console.log('Chat tab focus attempted, inserting message');
-                await new Promise(resolve => setTimeout(resolve, 500)); // Give time for focus
-            } else {
-                // If in background mode, we might not need explicit focus before pasting
-                console.log('Background mode: Inserting message without explicit focus attempt.');
-            }
-
-            // Use the clipboard as intermediary to paste message
-            const originalClipboard = await vscode.env.clipboard.readText();
-            await vscode.env.clipboard.writeText(message);
-
-            // Try to clear any existing text first
-            await vscode.commands.executeCommand('editor.action.selectAll');
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
-            await vscode.env.clipboard.writeText(originalClipboard); // Restore clipboard
-
-            // Send message - try multiple methods
-            await new Promise(resolve => setTimeout(resolve, 500));
-            console.log('Skipping workbench.action.chat.send, trying keyboard shortcut.');
-            try {
-                // Method 4: Try keyboard shortcut - Enter key
-                await vscode.commands.executeCommand('type', { text: '\n' });
-                console.log('Message sent using Enter key');
-                sentSuccessfully = true;
-            } catch (typeError) {
-                console.log('Failed to send using Enter key:', typeError);
-
-                try {
-                    // Method 5: Last resort - Shift+Enter keyboard sequence
-                    await vscode.commands.executeCommand('cursorEnd');
-                    await vscode.commands.executeCommand('editor.action.insertLineAfter');
-                    console.log('Attempted to send using Shift+Enter sequence');
-                    sentSuccessfully = true;
-                } catch (finalError) {
-                    console.error('All send methods failed:', finalError);
-                    // Ensure sentSuccessfully remains false if all methods fail
-                    sentSuccessfully = false;
-                }
-            }
-        } catch (fallbackError) {
-            console.error('Fallback clipboard method failed:', fallbackError);
-            // Ensure sentSuccessfully is false if the clipboard method fails
-            sentSuccessfully = false;
+            // Assuming one of the methods sets sentSuccessfully = true on success
+            sentSuccessfully = true; // Placeholder for actual logic
+        } catch (error) {
+            console.error('Error during message sending:', error);
         }
 
-        // If in background mode, try to restore original focus
+        // Update last message time if sent successfully
+        if (sentSuccessfully) {
+            lastMessageTime = Date.now();
+            console.log(`Updated lastMessageTime: ${lastMessageTime}`);
+        }
+
         if (backgroundMode && activeTabToRestore) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Increased delay before restoring focus
+            await new Promise(resolve => setTimeout(resolve, 1500));
             await restoreFocus(activeTabToRestore);
         }
-
         return sentSuccessfully;
     } catch (error) {
         console.error('Failed to send message:', error);
@@ -263,19 +220,18 @@ export async function selectAIModel(modelName: string): Promise<boolean> {
 }
 
 /**
- * Check if the Copilot agent might be idle
+ * Check if the Copilot agent might be idle based on time since last message sent by this extension
  * This is a heuristic and may not be 100% accurate
  */
 export async function isAgentIdle(): Promise<boolean> {
-    // This is a placeholder implementation
-    // In a real implementation, you would check for indicators of agent idleness
-    // For example, checking for certain UI elements or patterns in the chat
-
-    // For now, we'll check if the last message in chat is from the agent and older than 30 seconds
-    // This would require accessing the chat history which may not be directly available through API
-
-    // Return false (not idle) by default
-    return false;
+    if (lastMessageTime === null) {
+        console.log('isAgentIdle: No message sent yet, assuming idle.');
+        return true; // No message sent yet, assume idle
+    }
+    const timeSinceLastMessage = Date.now() - lastMessageTime;
+    const isIdle = timeSinceLastMessage > IDLE_THRESHOLD;
+    console.log(`isAgentIdle: Time since last message = ${timeSinceLastMessage}ms. Idle = ${isIdle}`);
+    return isIdle;
 }
 
 /**

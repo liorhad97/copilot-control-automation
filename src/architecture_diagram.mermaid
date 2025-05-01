@@ -1,0 +1,112 @@
+classDiagram
+    class workflow {
+        +isWorkflowRunning(context)
+        +isWorkflowPaused(context)
+        +isBackgroundMode(context)
+        +setBackgroundMode(context, enabled)
+        +getIterationCount(context)
+        +runWorkflow(context, action)
+        +pauseWorkflow(context)
+        +resumeWorkflow(context)
+        +stopWorkflow(context)
+    }
+    
+    class WorkflowManager {
+        -isRunning: boolean
+        -isPaused: boolean
+        -backgroundMode: boolean
+        -iterationCount: number
+        -currentWorkflowPromise: Promise
+        +getInstance(context): WorkflowManager
+        +isWorkflowRunning(): boolean
+        +isWorkflowPaused(): boolean
+        +isBackgroundMode(): boolean
+        +setBackgroundMode(enabled): void
+        +getIterationCount(): number
+        +runWorkflow(context, action): Promise
+        -startWorkflow(context): Promise
+        -restartWorkflow(context): Promise
+        -continueWorkflow(context): Promise
+        +pauseWorkflow(): void
+        +resumeWorkflow(): void
+        +stopWorkflow(): Promise
+        +checkContinue(): Promise
+    }
+    
+    class WorkflowCommandExecutor {
+        -context: ExtensionContext
+        +sleep(ms): Promise
+        +executeInitialSetup(backgroundMode): Promise
+        +executeDevelopmentWorkflow(backgroundMode, iterationCount): Promise
+        -executeTestWorkflow(backgroundMode, iterationMessage): Promise
+        +executeContinueDevelopment(backgroundMode, iterationCount): Promise
+        -sendChecklistToChat(backgroundMode): Promise
+        -shouldContinueToNextIteration(): Promise
+    }
+    
+    class ConfigurationManager {
+        +getInstance(): ConfigurationManager
+        -getConfig(): WorkspaceConfiguration
+        +getBackgroundMode(): boolean
+        +getAgentMode(): string
+        +getPreferredModels(): string[]
+        +shouldCreateBranch(): boolean
+        +shouldWriteTests(): boolean
+        +getMaxIterations(): number
+        +updateSetting(key, value, target): Promise
+    }
+    
+    class PromptLoader {
+        -context: ExtensionContext
+        +loadPromptFile(fileName): Promise
+    }
+    
+    class GitService {
+        +createAndCheckoutBranch(branchNamePrefix): Promise
+        +commitChanges(message): Promise
+        +getCurrentBranch(): Promise
+        -showInfo(message): void
+        -showWarning(message): void
+        -showError(message): void
+    }
+    
+    class WorkflowErrors {
+        WorkflowCancelledError
+        WorkflowTimeoutError
+        ConfigurationError
+        CommunicationError
+        GitOperationError
+        PromptLoadError
+    }
+    
+    class StatusManager {
+        -state: WorkflowState
+        -statusBarItem: StatusBarItem
+        +getInstance(): StatusManager
+        +setState(state, message): void
+        +getState(): WorkflowState
+    }
+    
+    class chatUtils {
+        +ensureChatOpen(maxAttempts, delayBetweenAttempts, shouldFocus): Promise
+        +selectAIModel(modelName): Promise
+        +sendChatMessage(message, inBackground): Promise
+    }
+    
+    class helpers {
+        +sleep(ms): Promise
+        +getTimestampString(): string
+        +toCamelCase(str): string
+        +generateUniqueId(): string
+        +retry(fn, maxAttempts, delayMs): Promise
+    }
+    
+    workflow --> WorkflowManager : Facade
+    WorkflowManager --> WorkflowCommandExecutor : uses
+    WorkflowManager --> ConfigurationManager : uses
+    WorkflowManager ..> WorkflowErrors : throws
+    WorkflowCommandExecutor --> StatusManager : updates
+    WorkflowCommandExecutor --> PromptLoader : loads prompts
+    WorkflowCommandExecutor --> GitService : performs git operations
+    WorkflowCommandExecutor --> chatUtils : sends messages
+    WorkflowCommandExecutor ..> helpers : utility functions
