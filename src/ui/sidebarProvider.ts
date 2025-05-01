@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConfigurationManager } from '../services/ConfigurationManager';
 import { StatusManager, WorkflowState } from '../services/StatusManager';
-import { getNonce } from '../utils/Helpers';
+import { getNonce } from '../utils/helpers';
 import { isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, stopWorkflow } from '../workflows/workflow';
 
 /**
@@ -74,8 +74,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         }
         case 'updateConfig': {
           await this.configManager.updateSetting(
-            data.key, 
-            data.value, 
+            data.key,
+            data.value,
             vscode.ConfigurationTarget.Global
           );
           break;
