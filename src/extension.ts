@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { registerCommands } from './commands';
-import { clearMonitoringTimers, setupMonitoringTimers } from './monitoring';
-import { StatusManager } from './statusManager';
-import { FloatingControlsPanel } from './ui/floatingControlsPanel';
-import { SidebarProvider } from './ui/sidebarProvider';
+import { CommandRegistrar } from './commands/CommandRegistrar';
+import { MonitoringService } from './monitoring/MonitoringService';
+import { StatusManager } from './services/StatusManager';
+import { FloatingControlsPanel } from './ui/FloatingControlsPanel';
+import { SidebarProvider } from './ui/SidebarProvider';
 
 // Global variable to hold the floating controls panel instance
 let floatingControlsPanel: FloatingControlsPanel | undefined;
@@ -79,11 +79,11 @@ export function activate(context: vscode.ExtensionContext) {
 	// Auto-show floating controls panel on activation
 	floatingControlsPanel.show();
 
-	// Register commands from the dedicated file
-	registerCommands(context);
+	// Register commands from the dedicated registrar
+	CommandRegistrar.registerCommands(context);
 
-	// Set up timers for monitoring from the dedicated file
-	setupMonitoringTimers(context);
+	// Set up monitoring service
+	MonitoringService.initialize(context);
 
 	// Register welcome page command
 	context.subscriptions.push(
@@ -108,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
 	console.log('Marco AI extension is now deactivated');
 
-	// **Clean Up Resources**
+	// Clean Up Resources
 	// Dispose of the floating controls panel if it exists
 	if (floatingControlsPanel) {
 		floatingControlsPanel.dispose();
@@ -116,5 +116,9 @@ export function deactivate() {
 	}
 
 	// Clear any active monitoring timers
-	clearMonitoringTimers();
+	MonitoringService.clearMonitoringTimers();
+
+	// Dispose of the status manager
+	const statusManager = StatusManager.getInstance();
+	statusManager.dispose();
 }
