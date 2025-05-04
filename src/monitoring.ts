@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ensureChatOpen } from './utils/chatUtils'; // Adjusted import path
-import { isWorkflowPaused, isWorkflowRunning } from './workflows/workflowManager';
+import { isWorkflowPaused, isWorkflowRunning } from './workflows/workflowState';
 
 let checkAgentTimer: NodeJS.Timeout | undefined;
 let ensureChatTimer: NodeJS.Timeout | undefined;

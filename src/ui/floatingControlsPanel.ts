@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import { isWorkflowPaused, isWorkflowRunning, runWorkflow, stopWorkflow } from '../workflows/workflowManager';
+import { isWorkflowPaused, isWorkflowRunning } from '../workflows/workflowState';
+// Import functions that are actually defined in workflowManager
+import { runWorkflow, stopWorkflow } from '../workflows/workflowManager';
 
 /**
  * Manages a floating panel with workflow control buttons (play, stop, reset)

@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { ensureChatOpen, isAgentIdle, sendChatMessage } from './utils/chatUtils';
-import { isWorkflowPaused, isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, setBackgroundMode, stopWorkflow } from './workflows/workflowManager';
+import { isWorkflowPaused, isWorkflowRunning, setBackgroundMode } from './workflows/workflowState';
+// Import functions that are actually defined in workflowManager
+import { pauseWorkflow, resumeWorkflow, runWorkflow, stopWorkflow } from './workflows/workflowManager';
 
 export function registerCommands(context: vscode.ExtensionContext) {
     // Command to toggle workflow (play/stop)

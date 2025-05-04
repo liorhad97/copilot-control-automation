@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from '../statusManager';
 import { getNonce } from '../utils/helpers';
-import { isWorkflowRunning, pauseWorkflow, resumeWorkflow, runWorkflow, stopWorkflow } from '../workflows/workflowManager';
+import { isWorkflowRunning } from '../workflows/workflowState';
+// Import functions that are actually defined in workflowManager
+import { pauseWorkflow, resumeWorkflow, runWorkflow, stopWorkflow } from '../workflows/workflowManager';
 
 /**
  * SidebarProvider for Marco AI webview panel

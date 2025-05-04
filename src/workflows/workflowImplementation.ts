@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from '../statusManager';
+import { ensureChatOpen, selectAIModel, sendChatMessage } from '../utils/chatUtils';
 import { createAndCheckoutBranch } from '../utils/gitUtils';
-import { ensureChatOpen, sendChatMessage, selectAIModel } from '../utils/chatUtils';
 import { sleep } from '../utils/helpers';
-import { 
-    checkContinue, 
+import { loadPromptFile, sendChecklistToChat } from './promptUtils';
+import {
+    checkContinue,
     getIterationCount,
     incrementIterationCount,
     isBackgroundMode
 } from './workflowState';
-import { loadPromptFile, sendChecklistToChat } from './promptUtils';
 
 /**
  * Performs the initial setup phase of the workflow
@@ -95,7 +95,7 @@ export async function initialSetup(context: vscode.ExtensionContext): Promise<vo
 
         await checkContinue();
 
-    } catch (error) {
+    } catch (error: any) {
         if (error.name === 'WorkflowCancelledError') {
             throw error;
         }
@@ -199,7 +199,7 @@ export async function developmentWorkflow(context: vscode.ExtensionContext): Pro
             // Workflow completed
             statusManager.setState(WorkflowState.Completed, 'Development workflow completed');
         }
-    } catch (error) {
+    } catch (error: any) {
         if (error.name === 'WorkflowCancelledError') {
             throw error;
         }
@@ -239,7 +239,7 @@ export async function continueDevelopment(context: vscode.ExtensionContext): Pro
         // Resume normal development workflow
         await developmentWorkflow(context);
 
-    } catch (error) {
+    } catch (error: any) {
         if (error.name === 'WorkflowCancelledError') {
             throw error;
         }
