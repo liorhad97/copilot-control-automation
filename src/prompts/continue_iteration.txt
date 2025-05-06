@@ -1,16 +1,12 @@
 # Continue Development Iteration
 
-Let's continue with the next iteration of development. Please review what has been accomplished so far and focus on the remaining items:
+We're moving to iteration ${ITERATION_NUMBER} of our development workflow. Let's continue working on the following checklist tasks:
 
-1. Review your previous changes and ensure they are working correctly
-2. Address any unresolved issues or incomplete items from the checklist
-3. Implement the next logical set of features or improvements
-4. Continue to follow best practices and maintain code quality
+${REMAINING_TASKS}
 
-If you've already completed all the originally requested work, focus on:
-- Refinements and optimizations
-- Additional test coverage
-- Improved error handling
-- Documentation improvements
+For each task:
+1. Implement the necessary code using TypeScript and OOP principles
+2. Create clean, short files following industry standards
+3. Update the task status to "completed" in CHECKLIST.json when finished
 
-Please confirm you understand what needs to be done in this iteration and outline your plan for proceeding.
+Please focus on delivering high-quality, maintainable code. If you need any clarification on the requirements, please ask.

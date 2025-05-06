@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 // Added for idle check
 let lastMessageTime: number | null = null;
-const IDLE_THRESHOLD = 60000; // 30 seconds in milliseconds
+const IDLE_THRESHOLD = 300000; // 5 minutes in milliseconds
 
 /**
  * Ensures the Copilot Chat is open with multiple retry attempts
@@ -199,22 +199,16 @@ async function restoreFocus(tabToRestore: vscode.Tab): Promise<boolean> {
  */
 export async function selectAIModel(modelName: string): Promise<boolean> {
     try {
-        console.log(`Attempting to select AI model: ${modelName}`);
-
-        // First ensure the chat is open
-        const chatOpened = await ensureChatOpen(3, 1000, true);
-        if (!chatOpened) {
-            console.log(`Failed to open chat before selecting model ${modelName}`);
-            return false;
-        }
-
-        // Try to find and click on the model selector
-        await vscode.commands.executeCommand('github.copilot-chat.selectModel', modelName);
-
-        console.log(`Successfully selected model: ${modelName}`);
+        console.log(`Model preference logged: ${modelName}`);
+        
+        // We no longer attempt to select models via commands
+        // Instead, we leave this for the user to configure via the API
+        
+        // This is now just a logging function that returns true
+        // to indicate we've acknowledged the model preference
         return true;
     } catch (error) {
-        console.log(`Error selecting model ${modelName}:`, error);
+        console.log(`Error logging model preference ${modelName}:`, error);
         return false;
     }
 }

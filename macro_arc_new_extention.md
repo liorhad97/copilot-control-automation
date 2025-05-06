@@ -1,89 +1,161 @@
-<!-- # Marco AI Workflow (Abstracted)
+# AI Agent Task Automation Framework
 
-## Initial Setup
+## I. Initialization Phase
 
-1.  **Launch Program:** When the program starts, it activates an overlay displaying the current "Agent State" and providing controls (Play/Stop/Pause/Restart).
-2.  **Initialize Interaction:** The program establishes a connection or interface for interacting with the agent.
-3.  **Set Agent Mode:**
-    *   Read the desired `agent_mode` (e.g., 'Agent', 'Edit', 'Ask') from the configuration.
-    *   Ensure the agent is operating in the specified mode using the appropriate command or setting.
-4.  **Select Agent LLM:**
-    *   The preferred model order is: Claude 3.7 Sonnet > Gemini 2.5 > GPT 4.1.
-    *   Configure the agent to use the highest-preferred model available from the list.
-5.  **Initial Git Branch Setup (Conditional):**
-    *   *IF* the user configuration `IS_INIT_CREATE_BRENCH` is `TRUE`:
-        *   Instruct the agent to create and checkout a new Git branch based on a predefined task description (e.g., content previously in `NEW_BRENCH.md`).
-        *   Wait for confirmation from the agent that the branch setup is complete.
+### Program Launch & UI Activation
+- The controlling program starts
+- Overlay UI displays the current "Agent State" (Idle, Running, Paused)
+- UI provides user controls (Play, Stop, Pause, Restart)
 
-## Development Workflow
+### Establish Agent Interface
+- Program initializes connection with the designated AI agent service
 
-1.  **Send Task (PROMPT):** Initiate the task by sending the initial checklist or task description (e.g., content previously in `INIT.md`) to the agent.
-2.  **Agent Coding (ACTION):** The agent begins coding based on the provided instructions.
-3.  **Check Agent Status (PROMPT):** Verify the agent's progress by sending a status check prompt (e.g., content previously in `CHECK_AGENT.md`).
-4.  **Request Tests (Conditional PROMPT):**
-    *   *IF* the user configuration `IS_NEED_TO_WRIGHT_TEST` is `TRUE`:
-        *   Instruct the agent to write tests for the current feature.
-5.  **Agent Writes Tests (Conditional ACTION):**
-    *   *IF* `IS_NEED_TO_WRIGHT_TEST` is `TRUE`:
-        *   The agent writes the requested tests.
-6.  **Check Agent Status (Conditional PROMPT):**
-    *   *IF* `IS_NEED_TO_WRIGHT_TEST` is `TRUE`:
-        *   Verify the agent's progress again using a status check prompt.
-7.  **Verify Checklist Completion (PROMPT):** Send a prompt to review the checklist status (e.g., content previously in `CHECK_CHECKLIST.md`). If incomplete, loop back to Step 1 of the Development Workflow.
+### Configure Agent Mode
+- **The copilot operates exclusively in 'Agent' mode**
+- Program automatically checks current state
+- System switches to 'Agent' mode if not already active
+- Verification ensures proper configuration
 
-## System Program Actions Defined
+### Select Agent LLM
+- System identifies available Large Language Models
+- Agent LLM selection follows priority order:
+  1. Claude 3.7 Sonnet
+  2. Gemini 2.5
+  3. GPT 4.1
+- Highest-priority available model is selected
+- System switches models automatically if API errors occur
 
-*   **Send Task:** Transmit the initial task description/checklist to the agent.
-*   **Agent Coding:** No direct program action required; coding is initiated by the agent following the task prompt.
-*   **Check Agent Status:** Send a predefined status inquiry prompt to the agent.
-*   **Request Tests:** Send a predefined prompt instructing the agent to write tests.
-*   **Verify Checklist Completion:** Send a predefined prompt asking the agent to confirm checklist completion status and potentially loop the workflow.
+### Initial Git Branch Setup (Conditional)
+- System checks IS_INIT_CREATE_BRENCH flag
+- If TRUE:
+  - Verifies user's Git login status
+  - Instructs agent to create new branch with "_refactor" suffix
+  - Executes Git commands from current branch
+  - Waits for confirmation before proceeding
 
-## Automated Monitoring
+## II. Task Definition & Preparation
+
+### Checklist File Verification
+- System checks for CHECKLIST.txt in specified location
+- If file doesn't exist:
+  - Program halts main process
+  - Opens VSCode interface for checklist creation
+  - Provides text editor for user input
+  - Creates new CHECKLIST.txt with user content
+  - Continues normal flow after file creation
+
+### Locate Checklist File
+- Identifies primary CHECKLIST.txt file
+- Verifies valid content and proper formatting
+
+### Parse Checklist into Sub-Tasks
+- Prompts AI agent to create JSON file
+- Splits content into sub-tasks using >>> delimiter
+- Trims whitespace from each sub-task
+- Creates CHECKLIST.json with structured format:
+  ```json
+  {
+      "tasks": [
+          {
+              "id": 1,
+              "description": "Task 1 description here",
+              "status": "pending"
+          }
+      ],
+      "metadata": {
+          "totalTasks": 0,
+          "completedTasks": 0,
+          "createdAt": "timestamp"
+      }
+  }
+  ```
+- Stores sub-tasks internally
+- Saves JSON file for persistence
+
+## III. Core Development Cycle
+
+### Select Next Sub-Task
+- Retrieves next pending sub-task from parsed checklist
+
+### Send Sub-Task Prompt
+- Sends current sub-task description to agent
+- Provides context if helpful
+
+### Agent Action: Coding/Implementation
+- Agent processes the sub-task prompt
+- Implements required changes
+
+### Program Action: Check Agent Status
+- Sends predefined status check prompt
+- Analyzes agent's response for progress updates
+
+### Program Action: Request Tests (Conditional)
+- Checks IS_NEED_TO_WRITE_TEST flag
+- If TRUE:
+  - Sends prompt instructing agent to write tests
+
+### Agent Action: Write Tests (Conditional)
+- If prompted, agent writes necessary tests
+
+### Program Action: Check Status After Tests (Conditional)
+- If IS_NEED_TO_WRITE_TEST is TRUE:
+  - Sends status check prompt again
+  - Analyzes agent's response
+
+### Program Action: Verify Sub-Task Completion
+- Sends prompt to confirm task completion
+- Updates sub-task status in CHECKLIST.json
+- Updates metadata (increments "completedTasks")
+
+### Program Action: Determine Next Action
+- Checks for more pending sub-tasks
+- If pending tasks exist:
+  - Returns to "Select Next Sub-Task"
+- Else:
+  - Proceeds to Finalization Phase
+
+## IV. Automated Monitoring
 
 ### Frequent Checks (Every 10 seconds)
-
-*   **Check Agent Activity:**
-    *   Use an internal mechanism (e.g., API status check, specific prompt) to determine if the agent is actively working.
-    *   *If Idle:* Send a prompt like "Are you still working on the task?".
+- **Check Agent Activity:**
+  - Uses internal mechanism to determine agent activity
+  - If Idle: Sends prompt "Are you still working on the task?"
 
 ### Regular Checks (Every 5 minutes)
+- **Check Chat Application Status:**
+  - Uses OS-level checks to verify chat application window
+  - If Closed: Attempts to relaunch application
 
-*   **Check Interaction Interface Status:**
-    *   Verify if the agent interaction process or connection is active.
-    *   *If Inactive/Closed:* Attempt to re-establish the connection or restart the process.
+### Test Procedures
+- **PROMPT Tests (Agent Interaction)**
+  1. If Agent Appears Stopped:
+     - Asks: "Have you finished the current task?"
+     - If YES: Proceeds to next workflow state
+     - If NO: Waits or prompts agent to continue
+  2. Check Feature Completion:
+     - Asks: "Have you completed implementing the feature?"
+     - Analyzes agent's response
 
-## Test Procedures
+- **OS Tests (System-Level)**
+  1. Monitor Chat Application:
+     - If Closed: Attempts to reopen application
+     - If Open: No action
 
-### PROMPT Tests (Agent Interaction)
+- **UI Tests (Visual Checks)**
+  1. Check for Errors:
+     - If Found:
+       - Attempts to change agent model
+       - Continues workflow, potentially re-prompting agent
 
-1.  **If Agent Appears Stopped:**
-    *   Ask: "Have you finished the current task?"
-    *   *If YES:* Proceed to the next workflow state.
-    *   *If NO:* Wait or prompt the agent to continue.
-2.  **Check Feature Completion:**
-    *   Ask: "Have you completed implementing the feature described in the checklist?"
-    *   Analyze the agent's response.
+## V. Finalization Phase
 
-### System Tests (Process/Connection Level)
+### Program Action: Final Status Report
+- Generates comprehensive status report
+- Displays report to user via UI
 
-1.  **Monitor Interaction Interface:**
-    *   *If Inactive/Closed:* Attempt to reopen/re-establish the interface.
-    *   *If Active:* No action.
+### Program Action: Cleanup & Shutdown
+- Performs necessary cleanup actions
+- Returns program to "Idle" state or shuts down
 
-### Error Handling (Agent Response Based)
-
-1.  **Check for Errors in Agent Response:**
-    *   Monitor agent responses for error indicators or failure messages.
-    *   *If Error Detected:*
-        *   Attempt to switch to the next preferred agent model.
-        *   Continue the workflow, potentially re-sending the last prompt or asking for clarification.
-
-## User Configuration Flags
-
-*   `IS_INIT_CREATE_BRENCH` (Boolean): If `true`, create and checkout a new Git branch during initial setup.
-*   `IS_NEED_TO_WRIGHT_TEST` (Boolean): If `true`, include steps for writing tests in the development workflow.
-
-
-
- -->
+### Optional User Action: Export Results
+- If requested, exports CHECKLIST.json and related logs

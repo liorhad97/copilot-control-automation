@@ -1,0 +1,16 @@
+The CHECKLIST.json file at ${FILE_PATH} has an invalid structure. Please update it to follow this format:
+
+```json
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Task name",
+      "description": "Detailed task description",
+      "status": "pending"
+    }
+  ]
+}
+```
+
+Each task needs these exact fields: id (number), name (string), description (string), and status (string). Please fix the file structure directly.

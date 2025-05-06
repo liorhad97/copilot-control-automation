@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { StatusManager, WorkflowState } from '../statusManager';
+import { CopilotResponseMonitor } from '../utils/copilotResponseMonitor';
 import { sleep } from '../utils/helpers';
+import { WorkflowCompletionHandler } from '../utils/workflowCompletionHandler';
 import { 
     isWorkflowRunning, 
     isWorkflowPaused, 
@@ -26,6 +28,8 @@ import {
  */
 export async function runWorkflow(context: vscode.ExtensionContext, action: string): Promise<void> {
     const statusManager = StatusManager.getInstance();
+    const responseMonitor = CopilotResponseMonitor.getInstance();
+    const completionHandler = WorkflowCompletionHandler.getInstance();
 
     switch (action) {
         case 'play':
@@ -42,6 +46,9 @@ export async function runWorkflow(context: vscode.ExtensionContext, action: stri
             const config = vscode.workspace.getConfiguration('marco');
             setBackgroundMode(config.get<boolean>('backgroundMode') || false);
 
+            // Start the Copilot response monitoring
+            responseMonitor.startMonitoring(context);
+
             // Show notification if starting in background mode
             if (isBackgroundMode()) {
                 vscode.window.showInformationMessage('Marco AI workflow starting in background mode. The chat will be minimized when possible.');
@@ -50,12 +57,23 @@ export async function runWorkflow(context: vscode.ExtensionContext, action: stri
             // Start the workflow in the background
             setWorkflowPromise((async () => {
                 try {
-                    await initialSetup(context);
+                    // Run the initialization phase
+                    const checklistPath = await initialSetup(context);
+                    
+                    // Directly proceed to development phase without asking for confirmation
+                    await completionHandler.transitionToNextPhase(
+                        context,
+                        "Initialization",
+                        "Development"
+                    );
                     await developmentWorkflow(context);
 
                     // Mark as completed
                     statusManager.setState(WorkflowState.Completed, "Workflow completed successfully");
                     setRunningStatus(false);
+                    
+                    // Stop monitoring once workflow is complete
+                    responseMonitor.stopMonitoring();
                 } catch (error) {
                     if (error instanceof WorkflowCancelledError) {
                         // This is expected when workflow is stopped
@@ -66,6 +84,9 @@ export async function runWorkflow(context: vscode.ExtensionContext, action: stri
                     }
                     setRunningStatus(false);
                     setPausedStatus(false);
+                    
+                    // Stop monitoring on error
+                    responseMonitor.stopMonitoring();
                 }
             })());
 
@@ -91,8 +112,18 @@ export async function runWorkflow(context: vscode.ExtensionContext, action: stri
                 // If paused, resume it
                 resumeWorkflow(context);
             } else {
-                // Continue with next iteration
-                await continueDevelopment(context);
+                // Confirm before continuing with next iteration
+                await completionHandler.confirmPhaseCompletion(
+                    `Iteration ${getIterationCount()}`,
+                    async () => {
+                        await completionHandler.transitionToNextPhase(
+                            context,
+                            `Iteration ${getIterationCount()}`,
+                            `Iteration ${getIterationCount() + 1}`
+                        );
+                        await continueDevelopment(context);
+                    }
+                );
             }
             break;
     }
@@ -121,7 +152,7 @@ export function resumeWorkflow(context: vscode.ExtensionContext): void {
 
     setPausedStatus(false);
     const statusManager = StatusManager.getInstance();
-    statusManager.setState(WorkflowState.Initializing, "Workflow resumed");
+    statusManager.setState(WorkflowState.Running, "Workflow resumed");
 }
 
 /**
@@ -139,6 +170,10 @@ export async function stopWorkflow(): Promise<void> {
     setWorkflowPromise(null);
     // Reset iteration count when stopping
     resetIterationCount();
+    
+    // Stop the Copilot response monitoring
+    const responseMonitor = CopilotResponseMonitor.getInstance();
+    responseMonitor.stopMonitoring();
 
     const statusManager = StatusManager.getInstance();
     statusManager.setState(WorkflowState.Idle, "Workflow stopped");

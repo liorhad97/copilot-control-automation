@@ -1,0 +1,23 @@
+I need you to create a structured checklist from the following user tasks:
+
+$TASKS$
+
+Please:
+1. Analyze these tasks and break them down into subtasks where appropriate
+2. Create a file named "CHECKLIST.json" in the workspace root directory
+3. Organize the tasks in this JSON structure:
+
+```json
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Task title",
+      "description": "Detailed task description",
+      "status": "pending"
+    }
+  ]
+}
+```
+
+This file will be used to track progress throughout our development workflow. Please create this file directly in the workspace root - do not just include it in your response.

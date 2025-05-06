@@ -15,7 +15,11 @@ export enum WorkflowState {
     ContinuingIteration = 'continuing-iteration',
     Paused = 'paused',
     Completed = 'completed',
-    Error = 'error'
+    Error = 'error',
+    // Additional states needed for the workflow service
+    Running = 'running',
+    SendingChecklist = 'sending-checklist',
+    Implementing = 'implementing'
 }
 
 type StateChangeListener = (state: WorkflowState, message?: string) => void;
@@ -32,6 +36,7 @@ export class StatusManager {
     private animationIndex = 0;
     private animationInterval: NodeJS.Timeout | undefined;
     private stateChangeListeners: StateChangeListener[] = [];
+    private currentMessage: string = '';
 
     private constructor() {
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
@@ -66,6 +71,11 @@ export class StatusManager {
     public setState(state: WorkflowState, message?: string): void {
         this.currentState = state;
         this.lastUpdateTime = new Date();
+        
+        if (message) {
+            this.currentMessage = message;
+        }
+        
         this.updateStatusBar(message);
 
         // Start or stop animation based on state
@@ -90,6 +100,13 @@ export class StatusManager {
      */
     public getState(): WorkflowState {
         return this.currentState;
+    }
+    
+    /**
+     * Get the current status message
+     */
+    public getMessage(): string {
+        return this.currentMessage;
     }
 
     /**
@@ -170,6 +187,9 @@ export class StatusManager {
             case WorkflowState.Paused: return '$(debug-pause)';
             case WorkflowState.Completed: return '$(check)';
             case WorkflowState.Error: return '$(error)';
+            case WorkflowState.Running: return '$(play)';
+            case WorkflowState.SendingChecklist: return '$(arrow-right)';
+            case WorkflowState.Implementing: return '$(code)';
             default: return '$(question)';
         }
     }

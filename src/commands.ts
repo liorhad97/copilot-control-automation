@@ -1,10 +1,15 @@
 import * as vscode from 'vscode';
+import { registerResponseDetectionCommands } from './commands/responseDetectionCommands';
 import { ensureChatOpen, isAgentIdle, sendChatMessage } from './utils/chatUtils';
 import { isWorkflowPaused, isWorkflowRunning, setBackgroundMode } from './workflows/workflowState';
 // Import functions that are actually defined in workflowManager
 import { pauseWorkflow, resumeWorkflow, runWorkflow, stopWorkflow } from './workflows/workflowManager';
+import { PromptLoader } from './utils/promptLoader';
 
 export function registerCommands(context: vscode.ExtensionContext) {
+    // Register response detection commands
+    registerResponseDetectionCommands(context);
+    
     // Command to toggle workflow (play/stop)
     context.subscriptions.push(
         vscode.commands.registerCommand('marco.toggleWorkflow', async () => {
@@ -73,8 +78,15 @@ export function registerCommands(context: vscode.ExtensionContext) {
                     const config = vscode.workspace.getConfiguration('marco');
                     const backgroundMode = config.get<boolean>('backgroundMode') || false;
 
+                    // Load and send the agent status check prompt
+                    const checkAgentPrompt = await PromptLoader.loadPrompt(
+                        context,
+                        'check_agent',
+                        {}
+                    );
+                    
                     // Send prompt to idle agent, using background mode setting
-                    await sendChatMessage('Are you still working on the task? If you have completed the task, please summarize what you have done.', backgroundMode);
+                    await sendChatMessage(`@agent ${checkAgentPrompt}`, backgroundMode);
                 }
             }
         })

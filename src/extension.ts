@@ -4,6 +4,7 @@ import { clearMonitoringTimers, setupMonitoringTimers } from './monitoring';
 import { StatusManager } from './statusManager';
 import { FloatingControlsPanel } from './ui/floatingControlsPanel';
 import { SidebarProvider } from './ui/sidebarProvider';
+import { ServiceLocator } from './adapters/serviceLocator'; // Import ServiceLocator
 
 // Global variable to hold the floating controls panel instance
 let floatingControlsPanel: FloatingControlsPanel | undefined;
@@ -54,6 +55,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// Initialize status manager
 	const statusManager = StatusManager.getInstance();
 	statusManager.initialize(context);
+
+	// Initialize ServiceLocator
+	ServiceLocator.getInstance().initialize(context);
 
 	// Create sidebar
 	const sidebarProvider = new SidebarProvider(context.extensionUri, context);

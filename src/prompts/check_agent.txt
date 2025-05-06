@@ -1,12 +1,10 @@
 # Agent Status Check
 
-Are you still actively working on the current task? Please provide a brief update on your progress:
+I noticed you've been idle for a while. Please provide a quick status update:
 
-1. What have you accomplished so far?
+1. What have you completed so far?
 2. What are you currently working on?
-3. Are there any blockers or issues preventing progress?
-4. Approximately what percentage of the task is complete?
+3. Are there any blockers I can help with?
+4. What's your next step?
 
-If you've completed the task, please summarize what you've implemented and how it satisfies the requirements.
-
-If you've been idle for too long, please continue the task. Focus on making incremental progress toward completing the requirements.
+If you've completed all tasks, please summarize your work and mark all relevant tasks as "completed" in the CHECKLIST.json file.

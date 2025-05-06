@@ -1,10 +1,10 @@
-**User Note:** For defining tasks via a checklist, please use a plain text file (.txt). Each distinct task or step within the checklist must be separated by >>>.for this checklist input only txt files
+**User Note:** For defining tasks via a checklist, please use the provided text field in the VS Code interface. The program will capture your input directly from this interface.
 
 ## I. Initialization Phase
 
 ### Program Launch & UI Activation:
 - The controlling program starts.
-- An overlay UI is displayed, showing the current "Agent State" (e.g., Idle, Running, Paused) and providing user controls (e.g., Play, Stop, Pause, Restart).
+- A VS Code tab interface is displayed, showing the current "Agent State" (e.g., Idle, Running, Paused) and providing user controls (e.g., Play, Stop, Pause, Restart).
 
 ### Establish Agent Interface:
 - The program initializes the connection or communication channel with the designated AI agent service.
@@ -21,7 +21,8 @@
   1. Claude 3.7 Sonnet
   2. Gemini 2.5
   3. GPT 4.1
-- Configure the agent interface to use the highest-priority model from the list that is currently available and operational meaning that is there is a api error then the program will change the agent LLM.
+  Do this via API commands
+- Configure the agent interface to use the highest-priority model from the list that is currently available and operational. If there is an API error, the program will change to the next available agent LLM.
 
 ### Initial Git Branch Setup (Conditional):
 - Check the user configuration flag IS_INIT_CREATE_BRENCH.
@@ -35,26 +36,15 @@
 
 ## II. Task Definition & Preparation
 
-### Checklist File Verification:
-- Check if the CHECKLIST.txt file exists in the specified location.
-- IF CHECKLIST.txt does NOT exist:
-  - The program will NOT proceed with the main process.
-  - Open an interface in VSCode for the user to create the checklist.
-  - Provide a text editor interface for the user to write the description of the checklist.
-  - Create a new file named "CHECKLIST.txt" with the user's content.
-  - Save the file to the appropriate location.
-  - Only after successful creation of CHECKLIST.txt, continue with the normal flow.
-
-### Locate Checklist File:
-- Identify the primary checklist file (CHECKLIST.txt) in the location where it was created or specified.
-- Verify the file has valid content and is properly formatted.
+### Checklist Input Capture:
+- Present a VS Code tab interface with a text field for the user to input their checklist of tasks.
+- Capture the user's input when they submit the form in this interface.
+- If no input is provided, the program will not proceed with the main process.
 
 ### Parse Checklist into Sub-Tasks:
-- Prompt the AI agent to create a JSON file.
-- Take the (potentially AI-reformatted) checklist content.
-- Split the content into a list of individual sub-tasks using >>> as the delimiter.
-- Trim whitespace from each sub-task.
-- Create a JSON file named "CHECKLIST.json" with the following structure:
+- Take the user's checklist input from the VS Code interface.
+- Send the user's input to the AI agent to process and create a structured task list.
+- The agent will analyze the input and create a JSON file named "CHECKLIST.json" with the following structure:
     ```json
     {
         "tasks": [
